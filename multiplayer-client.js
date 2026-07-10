@@ -1,247 +1,296 @@
 /* ================================================================
-   Cliente multiplayer — roda por fora do jogo, sem tocar no loop dele.
-   Espera window.__MP (exposto no fim do módulo do jogo) e a partir daí:
-   avatares dos outros jogadores, PVP, placar, kill feed e respawn.
+   CLIENTE BATTLE ROYALE — parte 1: interface (CSS, HUD, lobby, chat).
+   A lógica de partida mora em br-game.js (carregado daqui).
+   Sem servidor, nada disso liga e o jogo segue 100% solo.
    ================================================================ */
 (function () {
   'use strict';
 
+  /* carrega a parte 2 (lógica da partida) */
+  const s2 = document.createElement('script');
+  s2.src = 'br-game.js';
+  document.body.appendChild(s2);
+
   const poll = setInterval(() => {
     if (!window.__MP) return;
-    clearInterval(poll);
-    if (window.__MP.socket && window.__MP_init) boot(window.__MP);
-    else console.log('[MP] sem servidor — jogo segue solo');
+    if (window.__MP.socket && window.__MP_init) {
+      if (!window.__BR_game) return; // espera br-game.js carregar
+      clearInterval(poll);
+      boot(window.__MP, window.__game, window.__MP_init);
+    } else {
+      clearInterval(poll);
+      console.log('[BR] sem servidor — jogo solo');
+    }
   }, 120);
 
-  function boot(MP) {
+  function boot(MP, G, INIT) {
     const socket = MP.socket;
-    const THREE = MP.THREE;
-    const myId = window.__MP_init.id;
 
-    /* ---------- nick: ?nick=Fulano na URL > salvo > prompt > aleatório ---------- */
-    let nick = (new URLSearchParams(location.search).get('nick')
-      || localStorage.getItem('mp_nick') || '').trim().slice(0, 14);
-    if (!nick) {
-      let typed = null;
-      try { typed = prompt('Seu nick pra sessão online:'); } catch (e) { /* ambiente sem prompt */ }
-      nick = (typed || '').trim().slice(0, 14) || 'Recruta' + (100 + Math.floor(Math.random() * 900));
-    }
-    try { localStorage.setItem('mp_nick', nick); } catch (e) {}
-    socket.emit('hello', { nick });
-
-    const esc = s => String(s).replace(/[<>&"']/g, c =>
+    /* ---------- helpers ---------- */
+    const esc = s => String(s == null ? '' : s).replace(/[<>&"']/g, c =>
       ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
-
-    /* ---------- avatares remotos ---------- */
-    const remotes = new Map();          // id -> RemotePlayer
-    window.__MP_remotePlayers = [];     // array varrido pelo fire() do jogo
-
-    function nickSprite(name, cssColor) {
-      const cv = document.createElement('canvas');
-      cv.width = 256; cv.height = 64;
-      const ctx = cv.getContext('2d');
-      ctx.font = 'bold 34px system-ui, sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.shadowColor = 'rgba(0,0,0,.9)'; ctx.shadowBlur = 8;
-      ctx.fillStyle = cssColor;
-      ctx.fillText(name, 128, 32);
-      const tex = new THREE.CanvasTexture(cv);
-      const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-      spr.scale.set(2.8, 0.7, 1);
-      spr.position.y = 2.25;
-      return spr;
-    }
-
-    function makeRemote(id, nk, pos) {
-      // cor estável por id (hash simples -> matiz)
-      let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-      const hue = ((h >>> 0) % 360);
-      const color = new THREE.Color(`hsl(${hue}, 75%, 55%)`);
-
-      const group = new THREE.Group();
-      const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.1 });
-      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.38, 0.85, 4, 12), mat);
-      body.position.y = 1.02;
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 10),
-        new THREE.MeshStandardMaterial({ color: 0xe8c9a0, roughness: 0.7 }));
-      head.position.y = 1.72;
-      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.09, 0.12),
-        new THREE.MeshStandardMaterial({ color: 0x111418, roughness: 0.2, metalness: 0.6 }));
-      visor.position.set(0, 1.74, -0.2);
-      group.add(body, head, visor, nickSprite(nk, `hsl(${hue}, 85%, 70%)`));
-      if (Array.isArray(pos)) group.position.set(pos[0], pos[1], pos[2]);
-      MP.scene.add(group);
-
-      const rp = {
-        id, nick: nk, alive: true, group, mat,
-        targetPos: group.position.clone(), yaw: 0, targetYaw: 0, hitT: 0,
-        // mesmo contrato dos alvos do jogo: hitSpheres() + damage()
-        sphCache: [
-          { c: new THREE.Vector3(), r: 0.30, part: 'head' },
-          { c: new THREE.Vector3(), r: 0.45, part: 'body' },
-          { c: new THREE.Vector3(), r: 0.40, part: 'body' },
-        ],
-        hitSpheres() {
-          const p = this.group.position;
-          this.sphCache[0].c.set(p.x, p.y + 1.72, p.z);
-          this.sphCache[1].c.set(p.x, p.y + 1.15, p.z);
-          this.sphCache[2].c.set(p.x, p.y + 0.55, p.z);
-          return this.sphCache;
-        },
-        damage(dmg) {
-          // não aplica dano local: avisa o servidor, e o cliente da vítima
-          // (que conhece armadura/invulnerabilidade) aplica de verdade
-          socket.emit('shotHit', {
-            targetId: this.id, dmg: Math.round(dmg),
-            fromPos: [MP.player.pos.x, MP.player.pos.y + 1.5, MP.player.pos.z],
-          });
-          this.hitT = 0.3;
-          return false; // a morte é confirmada pelo evento playerKilled
-        },
+    function seededRng(seed) {
+      let s = seed >>> 0;
+      return () => {
+        s = (s + 0x6D2B79F5) | 0;
+        let t = Math.imul(s ^ (s >>> 15), 1 | s);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
       };
-      remotes.set(id, rp);
-      window.__MP_remotePlayers.push(rp);
-      return rp;
     }
 
-    function removeRemote(id) {
-      const rp = remotes.get(id);
-      if (!rp) return;
-      MP.scene.remove(rp.group);
-      remotes.delete(id);
-      const i = window.__MP_remotePlayers.indexOf(rp);
-      if (i >= 0) window.__MP_remotePlayers.splice(i, 1);
-    }
+    /* ---------- estado compartilhado com a parte 2 ---------- */
+    let nick = (localStorage.getItem('br_nick') || '').trim().slice(0, 14)
+      || 'Recruta' + (100 + Math.floor(Math.random() * 900));
+    let myColors;
+    try { myColors = JSON.parse(localStorage.getItem('br_colors')); } catch (e) { myColors = null; }
+    if (!Array.isArray(myColors) || myColors.length !== 4)
+      myColors = ['#4da6ff', '#2b3a4d', '#8a5a2b', '#ffd76a'];
 
-    for (const p of window.__MP_init.players) makeRemote(p.id, p.nick, p.pos);
+    const S = {
+      phase: 'LOBBY',           // LOBBY | COUNTDOWN | SHIP | FALL | PLAY | SPECT | ENDED
+      plan: INIT.plan || null,
+      matchNum: INIT.matchNum || 0,
+      hostId: INIT.hostId,
+      myKills: 0, aliveCount: 0, myPlacement: 0,
+      lastHit: null,            // { shooterId, shooterNick, weapon, t }
+      chuteOpen: false, jumped: false,
+      lateJoin: INIT.phase === 'PLAYING' || INIT.phase === 'ENDED',
+      clockOffset: INIT.serverNow - Date.now(),
+      t0: INIT.t0 || 0,
+      nick, myColors,
+      chatOpen: false,
+    };
+    S.now = () => Date.now() + S.clockOffset;
+    S.matchT = () => (S.now() - S.t0) / 1000;
 
-    /* ---------- placar ---------- */
-    const sb = document.createElement('div');
-    sb.style.cssText = 'position:fixed;top:120px;right:14px;z-index:150;background:rgba(8,12,18,.6);' +
-      'border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:8px 12px;min-width:158px;' +
-      'font:12px/1.75 system-ui,sans-serif;color:#e8f1f8;pointer-events:none;backdrop-filter:blur(4px)';
-    document.body.appendChild(sb);
-    function renderRoster(list) {
-      list.sort((a, b) => b.kills - a.kills);
-      sb.innerHTML =
-        '<div style="opacity:.7;letter-spacing:2px;font-size:10px;margin-bottom:3px"><b>PLACAR ONLINE · ' +
-        list.length + '</b></div>' +
-        list.map(p =>
-          `<div style="display:flex;justify-content:space-between;gap:14px${p.id === myId ? ';color:#7fd4ff' : ''}">` +
-          `<span>${esc(p.nick)}</span><b>${p.kills}</b></div>`).join('');
-    }
+    /* ---------- CSS ---------- */
+    const css = document.createElement('style');
+    css.textContent = `
+      .brPanel { position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center;
+        background: rgba(5,9,14,.88); backdrop-filter: blur(6px); color: #e8f1f8; font-family: system-ui, sans-serif; }
+      .brCard { background: rgba(14,20,28,.95); border: 1px solid rgba(255,255,255,.14); border-radius: 14px;
+        padding: 26px 32px; min-width: 560px; max-width: 800px; max-height: 88vh; overflow: auto; }
+      .brTitle { font-size: 26px; font-weight: 800; letter-spacing: 6px; color: #ffd76a; text-align: center; }
+      .brSub { text-align: center; opacity: .7; font-size: 12px; letter-spacing: 3px; margin: 4px 0 14px; }
+      .brRow { display: flex; gap: 20px; align-items: flex-start; }
+      .brCol { flex: 1; min-width: 0; }
+      .brH { font-size: 11px; letter-spacing: 3px; opacity: .65; margin: 12px 0 6px; }
+      .brBtn { display: block; width: 100%; margin-top: 16px; padding: 12px; text-align: center; cursor: pointer;
+        background: #ffd76a; color: #1a1408; font-weight: 800; letter-spacing: 3px; border-radius: 8px; border: 0; font-size: 15px; }
+      .brBtn:disabled { background: #3a4250; color: #8a94a3; cursor: default; }
+      .brInput { width: 100%; padding: 8px 10px; background: rgba(255,255,255,.08); color: #fff;
+        border: 1px solid rgba(255,255,255,.18); border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+      .brPlayers div { padding: 3px 0; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+      .brDot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: none; }
+      .brCount { font-size: 62px; font-weight: 800; color: #ffd76a; text-align: center; margin: 4px 0; }
+      .brTable { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+      .brTable td, .brTable th { padding: 4px 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,.07); }
+      .brTable th { opacity: .6; font-size: 10px; letter-spacing: 2px; }
+      #brTop { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); z-index: 40; display: none;
+        gap: 10px; pointer-events: none; font-family: system-ui, sans-serif; }
+      #brTop .pill { background: rgba(8,12,18,.62); border: 1px solid rgba(255,255,255,.14); border-radius: 20px;
+        padding: 6px 16px; color: #e8f1f8; font-size: 13px; font-weight: 600; white-space: nowrap; backdrop-filter: blur(4px); }
+      #brTop .pill b { color: #ffd76a; }
+      #brTop .pill.warn { border-color: #ff7043; color: #ffb59e; }
+      #brZoneMap { position: fixed; left: 22px; top: 202px; z-index: 40; border-radius: 10px; display: none;
+        border: 1px solid rgba(255,255,255,.16); background: rgba(8,12,18,.55); pointer-events: none; }
+      #brRoster { position: fixed; right: 12px; top: 60px; z-index: 40; background: rgba(8,12,18,.55); display: none;
+        border: 1px solid rgba(255,255,255,.12); border-radius: 8px; padding: 6px 10px; min-width: 132px;
+        font: 11.5px/1.7 system-ui, sans-serif; color: #dfe9f2; pointer-events: none; max-height: 130px; overflow: hidden; }
+      #brRoster .me { color: #7fd4ff; }
+      #brChat { position: fixed; left: 26px; bottom: 118px; z-index: 45; width: 330px;
+        font: 12.5px/1.45 system-ui, sans-serif; pointer-events: none; }
+      #brChatLog div { background: rgba(8,12,18,.55); border-radius: 6px; padding: 3px 9px; margin-top: 3px;
+        color: #e8f1f8; max-width: 100%; width: fit-content; word-break: break-word; }
+      #brChatLog .sys { color: #9fd8ff; font-style: italic; }
+      #brChatLog b { color: #ffd76a; }
+      #brChatInput { display: none; margin-top: 5px; pointer-events: auto; }
+      #brBossBar { position: fixed; left: 50%; top: 54px; transform: translateX(-50%); z-index: 40; width: 300px;
+        display: none; pointer-events: none; font-family: system-ui, sans-serif; }
+      #brBossBar .lbl { text-align: center; font-size: 10px; letter-spacing: 3px; color: #ffb59e; margin-bottom: 3px;
+        text-shadow: 0 1px 4px #000; }
+      #brBossBar .bar { height: 9px; border-radius: 5px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,120,80,.5); overflow: hidden; }
+      #brBossBar .fill { height: 100%; background: linear-gradient(90deg,#ff5f3c,#ffb03c); width: 100%; }
+      #brSpect { position: fixed; left: 50%; bottom: 13%; transform: translateX(-50%); z-index: 45;
+        background: rgba(8,12,18,.7); border: 1px solid rgba(255,255,255,.16); border-radius: 10px;
+        padding: 9px 22px; color: #e8f1f8; font: 14px system-ui, sans-serif; display: none; text-align: center; }
+      #brSpect b { color: #7fd4ff; }
+      #brHint { position: fixed; left: 50%; top: 62%; transform: translateX(-50%); z-index: 45; color: #fff;
+        font: 600 15px system-ui, sans-serif; text-shadow: 0 2px 8px #000; display: none; text-align: center;
+        background: rgba(8,12,18,.5); padding: 8px 18px; border-radius: 8px; }
+      #brToast { position: fixed; right: 30px; bottom: 190px; z-index: 45; display: flex; flex-direction: column;
+        gap: 5px; align-items: flex-end; font: 600 13px system-ui, sans-serif; pointer-events: none; }
+      #brToast div { background: rgba(8,12,18,.7); border-radius: 6px; padding: 5px 12px; border: 1px solid; }
+      .brFadeOut { animation: brFade 5s forwards; }
+      @keyframes brFade { 0%,75% { opacity: 1; } 100% { opacity: 0; } }
+      .rar-comum { color: #cfd8e3; border-color: #cfd8e3; }
+      .rar-incomum { color: #7ee081; border-color: #7ee081; }
+      .rar-raro { color: #5ab0ff; border-color: #5ab0ff; }
+      .rar-épico { color: #c37eff; border-color: #c37eff; }
+      .rar-lendário { color: #ffb03c; border-color: #ffb03c; }
+    `;
+    document.head.appendChild(css);
 
-    /* ---------- eventos do servidor ---------- */
-    let lastHit = null; // último atirador que me acertou (pra creditar o abate)
+    /* ---------- DOM do HUD BR ---------- */
+    const div = (id, parent) => { const d = document.createElement('div'); if (id) d.id = id; (parent || document.body).appendChild(d); return d; };
+    const topBar = div('brTop');
+    topBar.innerHTML = `<div class="pill" id="brAlive">—</div><div class="pill" id="brZonePill">—</div>`;
+    const zoneMapC = document.createElement('canvas');
+    zoneMapC.id = 'brZoneMap'; zoneMapC.width = 160; zoneMapC.height = 160;
+    document.body.appendChild(zoneMapC);
+    const rosterBox = div('brRoster');
+    const chatBox = div('brChat');
+    chatBox.innerHTML = `<div id="brChatLog"></div><input id="brChatInput" class="brInput" maxlength="120"
+      placeholder="Enter envia · Esc fecha">`;
+    const bossBar = div('brBossBar');
+    bossBar.innerHTML = `<div class="lbl">⛰ GOLEM DA FORTALEZA</div><div class="bar"><div class="fill" id="brBossFill"></div></div>`;
+    const spectBar = div('brSpect');
+    const hintBox = div('brHint');
+    const toastBox = div('brToast');
 
-    socket.on('playerUpdate', d => {
-      const rp = remotes.get(d.id) || makeRemote(d.id, d.nick || '???', d.pos);
-      rp.targetPos.set(d.pos[0], d.pos[1], d.pos[2]);
-      rp.targetYaw = d.rotY || 0;
-      rp.alive = true;
-    });
-
-    socket.on('youWereHit', d => {
-      lastHit = { shooterId: d.shooterId, t: Date.now() };
-      const f = d.fromPos;
-      MP.playerDamage(d.dmg, { x: f[0], y: f[1], z: f[2] }); // flash, seta de dano, armadura: tudo do jogo
-    });
-
-    socket.on('playerKilled', d => {
-      if (d.victimId !== myId) {
-        MP.addKillFeed(`<b>${esc(d.killerNick || 'O mundo')}</b> ▸ ${esc(d.victimNick)}`);
-        const rp = remotes.get(d.victimId);
-        if (rp) rp.hitT = 0.8;
-      } else if (d.killerNick) {
-        MP.addKillFeed(`<b>${esc(d.killerNick)}</b> te derrubou`);
-      }
-    });
-
-    socket.on('roster', renderRoster);
-    socket.on('playerLeft', d => removeRemote(d.id));
-
-    /* ---------- respawn (chamado pelo playerDamage do jogo via __MP_respawn) ---------- */
-    let mySpawn = MP.spawn || { x: 0, z: 0, face: 0 };
-
-    function doRespawn(sp) {
-      if (sp) mySpawn = sp;
-      const P = MP.player, S = mySpawn;
-      P.pos.set(S.x, MP.heightAt(S.x, S.z) + 0.6, S.z);
-      if (P.vel && P.vel.set) P.vel.set(0, 0, 0);
-      P.health = P.maxHealth || 100;
-      P.armor = 0;
-      P.healPool = 0;
-      P.dead = false;
-      P.invulnUntil = MP.state.gameTime + 2.5;
-      MP.camera.rotation.x = 0;
-      MP.camera.rotation.y = S.face || 0;
-      MP.setTimeScale(1);
-      const ds = document.getElementById('deathScreen');
-      if (ds) ds.classList.remove('show');
-      MP.updateHealthHUD(); MP.updateArmorHUD();
-      MP.addKillFeed('<b>Você</b> voltou ao combate');
-    }
-
-    window.__MP_respawn = function () {
-      let done = false;
-      const go = sp => { if (!done) { done = true; doRespawn(sp); } };
-      const killerId = lastHit && Date.now() - lastHit.t < 6000 ? lastHit.shooterId : null;
-      try {
-        socket.timeout(2000).emit('died', { killerId }, (err, newSpawn) => go(err ? null : newSpawn));
-      } catch (e) { go(null); }
-      setTimeout(() => go(null), 2600); // segurança: respawna mesmo sem resposta
+    const UI = {
+      topBar, zoneMapC, rosterBox, bossBar, spectBar, hintBox,
+      pillAlive: document.getElementById('brAlive'),
+      pillZone: document.getElementById('brZonePill'),
+      bossFill: document.getElementById('brBossFill'),
+      chatLog: document.getElementById('brChatLog'),
+      chatInput: document.getElementById('brChatInput'),
+      showHud(on) {
+        topBar.style.display = on ? 'flex' : 'none';
+        zoneMapC.style.display = on ? 'block' : 'none';
+        rosterBox.style.display = on ? 'block' : 'none';
+      },
+      toast(html, rarity) {
+        const d = document.createElement('div');
+        d.className = 'brFadeOut rar-' + (rarity || 'comum');
+        d.innerHTML = html;
+        toastBox.appendChild(d);
+        setTimeout(() => d.remove(), 5200);
+        while (toastBox.children.length > 5) toastBox.firstChild.remove();
+      },
+      hint(html, ms) {
+        hintBox.innerHTML = html || '';
+        hintBox.style.display = html ? 'block' : 'none';
+        if (html && ms) setTimeout(() => { hintBox.style.display = 'none'; }, ms);
+      },
+      addChat(nickName, msg, sys) {
+        const d = document.createElement('div');
+        if (sys) { d.className = 'sys'; d.textContent = msg; }
+        else d.innerHTML = `<b>${esc(nickName)}</b> ${esc(msg)}`;
+        d.classList.add('brFadeOut');
+        d.style.animationDuration = '11s';
+        UI.chatLog.appendChild(d);
+        setTimeout(() => d.remove(), 11200);
+        while (UI.chatLog.children.length > 7) UI.chatLog.firstChild.remove();
+      },
     };
 
+    /* esconde HUD solo que não faz sentido no BR */
+    for (const id of ['mission', 'score']) { const e = document.getElementById(id); if (e) e.style.display = 'none'; }
     const deathSub = document.getElementById('deathSub');
-    if (deathSub) deathSub.textContent = 'respawnando...';
+    if (deathSub) deathSub.textContent = 'calculando colocação...';
 
-    // só ativa o modo online depois que o respawn está pronto — se algo acima
-    // falhar, a morte continua caindo no location.reload() original (solo)
-    window.__MP_active = true;
+    /* ---------- LOBBY ---------- */
+    const lobby = div('brLobby');
+    lobby.className = 'brPanel';
+    lobby.style.display = 'none';
 
-    /* ---------- ao começar a partida, teleporta pro spawn da sala ---------- */
-    const startPoll = setInterval(() => {
-      if (!MP.state.started) return;
-      clearInterval(startPoll);
-      setTimeout(() => { // depois do applySave, pra posição do save não sobrescrever
-        const P = MP.player, S = mySpawn;
-        P.pos.set(S.x, MP.heightAt(S.x, S.z) + 0.6, S.z);
-        MP.camera.rotation.x = 0;
-        MP.camera.rotation.y = S.face || 0;
-        P.invulnUntil = MP.state.gameTime + 3;
-        MP.addKillFeed('<b>Online</b> · sessão conectada');
-      }, 400);
-    }, 150);
-
-    /* ---------- envia meu estado ~11x/s ---------- */
-    setInterval(() => {
-      if (!MP.state.started || MP.state.paused) return;
-      const p = MP.player.pos;
-      socket.volatile.emit('state', { pos: [p.x, p.y, p.z], rotY: MP.camera.rotation.y, nick });
-    }, 90);
-
-    /* ---------- interpolação suave dos avatares (loop próprio) ---------- */
-    let lastT = performance.now();
-    (function mpTick() {
-      requestAnimationFrame(mpTick);
-      const now = performance.now();
-      const dt = Math.min((now - lastT) / 1000, 0.1);
-      lastT = now;
-      const k = 1 - Math.exp(-12 * dt);
-      for (const rp of remotes.values()) {
-        rp.group.position.lerp(rp.targetPos, k);
-        let dy = rp.targetYaw - rp.yaw;
-        dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-        rp.yaw += dy * k;
-        rp.group.rotation.y = rp.yaw;
-        if (rp.hitT > 0) {
-          rp.hitT -= dt;
-          rp.mat.emissive.setHex(0xff2222);
-          rp.mat.emissiveIntensity = Math.max(0, rp.hitT * 4);
-        }
+    function lobbyHtml(extra) {
+      return `<div class="brCard">
+        <div class="brTitle">☄ QUEDA LIVRE</div>
+        <div class="brSub">BATTLE ROYALE · PARTIDA #${S.matchNum + 1} · mapa novo a cada rodada</div>
+        ${extra || ''}
+        <div class="brRow">
+          <div class="brCol">
+            <div class="brH">SEU NICK</div>
+            <input id="brNick" class="brInput" maxlength="14" value="${esc(S.nick)}">
+            <div class="brH">CORES DO PERSONAGEM</div>
+            <div style="display:flex;gap:8px">
+              ${['corpo', 'roupa', 'detalhe', 'visor'].map((l, i) =>
+                `<label style="font-size:10px;text-align:center;opacity:.8">${l}<br>
+                 <input type="color" class="brCol4" data-i="${i}" value="${S.myColors[i]}"
+                   style="width:44px;height:34px;border:0;background:none;cursor:pointer"></label>`).join('')}
+            </div>
+            <div class="brH">NA SALA</div>
+            <div class="brPlayers" id="brLobbyList">—</div>
+            <button class="brBtn" id="brStartBtn" disabled>AGUARDANDO O ANFITRIÃO...</button>
+          </div>
+          <div class="brCol">
+            <div class="brH">🏆 RANKING GLOBAL</div>
+            <table class="brTable" id="brGlobalTable"></table>
+            <div class="brH">COMO FUNCIONA</div>
+            <div style="font-size:12px;opacity:.8;line-height:1.6">
+              Todos caem da <b>nave</b> no mesmo mapa. Você começa só com a <b>faca</b> —
+              abra <b>baús</b> pra achar armas (comum → lendária), derrote o <b>GOLEM</b>
+              pro loot lendário, fuja do <b>gás</b> e seja o último vivo. 🏆
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }
+    function renderGlobal(top) {
+      const t = document.getElementById('brGlobalTable');
+      if (!t) return;
+      t.innerHTML = '<tr><th>#</th><th>nick</th><th>pts</th><th>V</th><th>K</th></tr>' +
+        (top && top.length ? top.map((r, i) =>
+          `<tr><td>${i + 1}</td><td>${esc(r.nick)}</td><td>${r.points}</td><td>${r.wins}</td><td>${r.kills}</td></tr>`).join('')
+          : '<tr><td colspan="5" style="opacity:.5">ainda sem partidas</td></tr>');
+    }
+    let lastRosterList = [];
+    function refreshLobbyRoster() {
+      const el = document.getElementById('brLobbyList');
+      if (el) el.innerHTML = lastRosterList.map(p =>
+        `<div><span class="brDot" style="background:${esc((p.colors || ['#888'])[0])}"></span>
+         ${esc(p.nick)}${p.id === S.hostId ? ' 👑' : ''}${p.spectator ? ' <i style="opacity:.5">(espectador)</i>' : ''}</div>`).join('')
+        || '<div style="opacity:.5">só você por enquanto — chama a galera!</div>';
+      const btn = document.getElementById('brStartBtn');
+      if (btn) {
+        const isHost = INIT.id === S.hostId;
+        btn.disabled = !isHost;
+        btn.textContent = isHost ? '▶ COMEÇAR PARTIDA' : 'AGUARDANDO O ANFITRIÃO...';
       }
-    })();
+    }
+    function wireLobby() {
+      const nickEl = document.getElementById('brNick');
+      if (nickEl) nickEl.addEventListener('input', () => {
+        S.nick = nickEl.value.trim().slice(0, 14) || S.nick;
+        localStorage.setItem('br_nick', S.nick);
+        socket.emit('hello', { nick: S.nick, colors: S.myColors });
+      });
+      for (const inp of lobby.querySelectorAll('.brCol4')) {
+        inp.addEventListener('input', () => {
+          S.myColors[+inp.dataset.i] = inp.value;
+          localStorage.setItem('br_colors', JSON.stringify(S.myColors));
+          socket.emit('hello', { nick: S.nick, colors: S.myColors });
+        });
+      }
+      const btn = document.getElementById('brStartBtn');
+      if (btn) btn.addEventListener('click', () => socket.emit('requestStart'));
+      renderGlobal(window.__BR_lastGlobalTop || INIT.globalTop);
+      refreshLobbyRoster();
+    }
+    const LOBBY = {
+      show(extra) { lobby.innerHTML = lobbyHtml(extra); lobby.style.display = 'flex'; wireLobby(); },
+      hide() { lobby.style.display = 'none'; },
+      setRoster(list) { lastRosterList = list; refreshLobbyRoster(); },
+      renderGlobal,
+      countdown(n) {
+        const card = lobby.querySelector('.brCard');
+        if (!card) return;
+        let c = document.getElementById('brCountBig');
+        if (!c) { c = document.createElement('div'); c.id = 'brCountBig'; c.className = 'brCount'; card.insertBefore(c, card.children[2]); }
+        c.textContent = n > 0 ? n : 'VAI!';
+      },
+      overlay(html) { // telas de morte/vitória usam o mesmo painel
+        lobby.innerHTML = `<div class="brCard">${html}</div>`;
+        lobby.style.display = 'flex';
+      },
+    };
 
-    console.log('[MP] conectado como', nick, '· id', myId);
+    socket.emit('hello', { nick: S.nick, colors: S.myColors });
+
+    /* entrega tudo pra parte 2 (lógica da partida) */
+    window.__BR_game.start({ MP, G, INIT, socket, S, UI, LOBBY, esc, seededRng });
   }
 })();

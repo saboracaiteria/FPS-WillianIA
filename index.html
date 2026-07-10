@@ -2180,6 +2180,22 @@ function addHands(parts, g, rPos, rRot, lParent, lPos, lRot) {
   hl.userData.base = { p: hl.position.clone(), rx: hl.rotation.x, rz: hl.rotation.z };
 }
 
+/* ---- FACA: arma inicial do Battle Royale (melee, sem munição) ---- */
+function buildKnife() {
+  const g = new THREE.Group(), parts = {};
+  wbox(g, wm.steel, 0.022, 0.085, 0.32, 0, 0.02, -0.25, { r: 0.4 });  // lâmina
+  wbox(g, wm.steel, 0.014, 0.048, 0.11, 0, 0.046, -0.37, { r: 0.5 }); // ponta
+  wbox(g, wm.brass, 0.072, 0.024, 0.03, 0, 0, -0.08);                 // guarda
+  wbox(g, wm.wood, 0.034, 0.05, 0.16, 0, -0.004, 0.02, { r: 0.35 });  // cabo
+  wbox(g, wm.black, 0.038, 0.054, 0.028, 0, -0.004, 0.11, { r: 0.4 });// pomo
+  wbox(g, wm.amber, 0.024, 0.01, 0.2, 0, 0.055, -0.2);                // fio luminoso
+  addHands(parts, g, [0.015, -0.055, 0.03], [0.25, 0, -1.45], g, [-0.24, -0.16, 0.28], [0.4, 0.6, Math.PI]);
+  const muzzleAnchor = new THREE.Group();
+  muzzleAnchor.position.set(0, 0.02, -0.4);
+  g.add(muzzleAnchor);
+  return { group: g, parts, muzzleAnchor };
+}
+
 /* ---- registro do arsenal ---- */
 function makeWeapon(def, buildFn) {
   const { group, parts, muzzleAnchor } = buildFn();
@@ -2208,6 +2224,9 @@ const arsenal = [
   makeWeapon({ name: 'PLASMA "VISITANTE"', auto: true, rpm: 430, dmg: 38, pellets: 1, magSize: 42, reserveStart: 210,
     reloadTime: 1.7, spreadHip: 0.012, spreadAds: 0.003, recoilP: 0.4, recoilY: 0.1, kick: 0.04,
     adsFov: 58, hip: [0.26, -0.235, -0.48], ads: [0, -0.083, -0.3], laser: true, locked: true }, buildPlasma),
+  makeWeapon({ name: 'FACA "AURORA"', auto: false, rpm: 130, dmg: 34, pellets: 1, magSize: 1, reserveStart: 0,
+    reloadTime: 0.8, spreadHip: 0, spreadAds: 0, recoilP: 0.3, recoilY: 0.06, kick: 0.07,
+    adsFov: 66, hip: [0.3, -0.25, -0.48], ads: [0.16, -0.19, -0.4], melee: true, locked: true }, buildKnife),
 ];
 if (SAVE && SAVE.weapons) for (const i of SAVE.weapons) if (arsenal[i]) arsenal[i].locked = false;
 function unlockWeapon(i, msg) {
@@ -2710,9 +2729,9 @@ function eatMeat() {
 
 /* ---- recarga (por arma) ---- */
 function updateAmmoHUD() {
-  ui.ammoMag.textContent = gun.mag;
-  ui.ammoMag.classList.toggle('empty', gun.mag === 0);
-  ui.ammoReserve.textContent = '| ' + gun.reserve;
+  ui.ammoMag.textContent = gun.melee ? '—' : gun.mag;
+  ui.ammoMag.classList.toggle('empty', !gun.melee && gun.mag === 0);
+  ui.ammoReserve.textContent = gun.melee ? '' : '| ' + gun.reserve;
   ui.weaponName.textContent = gun.name;
 }
 function startReload(t) {
@@ -2748,6 +2767,17 @@ function rayBlockedAt(origin, dir, maxDist) {
 const _rayDir = new THREE.Vector3(), _rayOrig = new THREE.Vector3(), _hitPos = new THREE.Vector3();
 const _hitAgg = new THREE.Vector3();
 function fire(t) {
+  // faca (melee): golpe curto, sem munição/flash/som de tiro
+  if (gun.melee) {
+    gun.cycleT = 0.34;
+    addTrauma(0.06);
+    recoil.kickZ += 0.12; recoil.kickRot += 0.1;
+    SFX.switchW();
+    camera.getWorldPosition(_rayOrig);
+    camera.getWorldDirection(_rayDir);
+    if (window.__BR_melee) window.__BR_melee(_rayOrig, _rayDir, gun.dmg);
+    return;
+  }
   gun.mag--;
   updateAmmoHUD();
   muzzleFlash(gun.pellets > 1 ? 1.5 : 1);
@@ -2793,6 +2823,9 @@ function fire(t) {
     camera.getWorldDirection(_rayDir);
     _v1.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(spread * Math.sqrt(Math.random()));
     _rayDir.add(_v1).normalize();
+
+    // BR online: armas marcadas com projSpeed disparam projétil real (queda + tempo de voo)
+    if (window.__BR_ballistics && gun.projSpeed) { window.__BR_ballistics(_v3, _rayDir, gun); continue; }
 
     // inimigos comuns (esferas analíticas)
     let bestT = Infinity, bestEnemy = null, bestPart = null, bestBoss = false;
@@ -2914,7 +2947,7 @@ function shootUpdate(dt, t) {
     centerMsg('Mira: ' + s.name, 1100);
     SFX.switchW();
   }
-  if (state.driving || state.flying || state.paused || player.dead) { mouse.clicked = false; return; }
+  if (state.driving || state.flying || state.paused || player.dead || window.__BR_freeze) { mouse.clicked = false; return; }
   if (justPressed.has('KeyG')) Grenades.throwNade(t);
   const interval = 60 / gun.rpm;
   const want = gun.auto ? mouse.shooting : mouse.clicked;
@@ -5362,13 +5395,15 @@ const Interact = (() => {
   function current() {
     if (state.flying) return { txt: 'SAIR DO HELICÓPTERO', fn: () => Heli.exit() };
     if (state.driving) return { txt: 'SAIR DO VEÍCULO', fn: tryToggleCar };
-    const bz = Structures.bazookaSpot;
-    if (arsenal[3].locked && Math.hypot(player.pos.x - bz.x, player.pos.z - bz.z) < 2.8 && Math.abs(player.pos.y - bz.y) < 3.5)
-      return { txt: 'PEGAR BAZUCA', fn: () => unlockWeapon(3, 'tecla 4 para equipar') };
-    for (const s of Structures.saveSpots)
-      if (Math.hypot(player.pos.x - s.x, player.pos.z - s.z) < 2.4) return { txt: 'SALVAR JOGO', fn: saveGame };
-    for (const s of Structures.chestSpots)
-      if (Math.hypot(player.pos.x - s.x, player.pos.z - s.z) < 2.4) return { txt: 'USAR BAÚ', fn: chestSwap };
+    if (!window.__BR_active) { // BR: sem save, sem baú de guardar, sem bazuca grátis (loot vem dos baús BR)
+      const bz = Structures.bazookaSpot;
+      if (arsenal[3].locked && Math.hypot(player.pos.x - bz.x, player.pos.z - bz.z) < 2.8 && Math.abs(player.pos.y - bz.y) < 3.5)
+        return { txt: 'PEGAR BAZUCA', fn: () => unlockWeapon(3, 'tecla 4 para equipar') };
+      for (const s of Structures.saveSpots)
+        if (Math.hypot(player.pos.x - s.x, player.pos.z - s.z) < 2.4) return { txt: 'SALVAR JOGO', fn: saveGame };
+      for (const s of Structures.chestSpots)
+        if (Math.hypot(player.pos.x - s.x, player.pos.z - s.z) < 2.4) return { txt: 'USAR BAÚ', fn: chestSwap };
+    }
     if (player.pos.distanceTo(Heli.group.position) < 5) return { txt: 'PILOTAR HELICÓPTERO', fn: tryToggleCar };
     const near = Car.nearest(player.pos);
     if (near.d < 4.5) return { txt: 'ENTRAR — ' + near.v.cfg.name, fn: tryToggleCar };
@@ -5523,20 +5558,18 @@ function tick(forceDt) {
 
   /* simulação */
   Env.update(dt, t);
-  if (!state.driving && !state.flying) playerUpdate(dt, t);
+  if (!state.driving && !state.flying && !window.__BR_freeze) playerUpdate(dt, t);
   shootUpdate(dt, t);
   world.step(1 / 60, dt, 3);
   Car.update(dt, t);
   Heli.update(dt, t);
-  Enemies.update(dt, t);
+  if (!window.__BR_active) Enemies.update(dt, t); // BR: sem inimigos comuns
   Animals.update(dt, t);
-  Night.update(dt, t);
+  if (!window.__BR_active) Night.update(dt, t);   // BR: sem zumbis/fantasmas
   Grenades.update(dt, t);
   Rockets.update(dt, t);
   Pickups.update(dt, t);
-  Boss.update(dt, t);
-  Alien.update(dt, t);
-  Missions.update();
+  if (!window.__BR_active) { Boss.update(dt, t); Alien.update(dt, t); Missions.update(); }
   Interact.update(dt, t);
   FX.update(dt);
   Amb.update(dt, t);
@@ -5659,8 +5692,10 @@ window.__game = {
 window.__MP = {
   THREE, scene, camera, renderer, composer, player, state, CFG,
   heightAt, groundAt, addKillFeed, showHitmarker, playerDamage,
-  updateHealthHUD, updateArmorHUD, updateAmmoHUD, updateInvHUD,
+  updateHealthHUD, updateArmorHUD, updateAmmoHUD, updateInvHUD, updateSlotsHUD,
   setTimeScale: v => { timeScale = v; },
+  FX, DmgNums, SFX, rayBlockedAt, weaponRoot, centerMsg, showBanner,
+  WATER_LEVEL, slopeAt, justPressed,
   socket: __mpSocket, spawn: __mpSpawn,
 };
 
