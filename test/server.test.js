@@ -214,7 +214,7 @@ describe('Combate', () => {
 
   it('dado um atirador morto, então os tiros dele são ignorados', async t => {
     const { clients } = await playing(t, 3);
-    const [a, b, c] = clients;
+    const [a, , c] = clients;
     await ack(a.s, 'died', {}); // A morre
     const hits = collect(c.s, 'youWereHit');
     a.s.emit('shotHit', { targetId: c.init.id, dmg: 50, weapon: 'FUZIL', fromPos: [0, 0, 0] });

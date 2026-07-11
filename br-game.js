@@ -376,7 +376,6 @@
       const t = S.matchT();
       const ph = S.plan.zone;
       const first = ph[0];
-      const preT = first.tWaitEnd - (first.tShrinkEnd - first.tWaitEnd) - t; // aproximação até o gás valer
       zc.started = t > first.tWaitEnd - 999; // sempre true depois do plano existir
       let cur = null, shrinking = false, k = 0;
       for (const p of ph) {
@@ -568,7 +567,6 @@
     let bossDeadAnim = 0, lastAoE = 0;
     function buildBoss() {
       if (bossDeadFlag) return;
-      const F = G.Structures.FORT_POS;
       const mRock = new THREE.MeshStandardMaterial({ color: 0x4a4f58, roughness: 0.85 });
       const mMoss = new THREE.MeshStandardMaterial({ color: 0x3e6b34, roughness: 0.9 });
       const mCore = new THREE.MeshStandardMaterial({ color: 0x200800, emissive: 0xff7a2e, emissiveIntensity: 3 });
@@ -891,7 +889,6 @@
         MP.FX.burst(p.clone().setY(p.y + 3), new THREE.Vector3(0, 1, 0), 'spark');
         // baú lendário no lugar
         setTimeout(() => {
-          const g = crates.length; // reaproveita o sistema de baús
           const y = MP.heightAt(p.x, p.z);
           const mBox = new THREE.MeshStandardMaterial({ color: 0x5b4630, roughness: 0.7 });
           const mBand = new THREE.MeshStandardMaterial({ color: 0x2a1500, emissive: 0xffb03c, emissiveIntensity: 2.5 });

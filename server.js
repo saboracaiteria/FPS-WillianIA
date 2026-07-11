@@ -14,9 +14,10 @@ const fs = require('fs');
 const { Server } = require('socket.io');
 
 const app = express();
+// whitelist explícita: nada de server.js/node_modules baixável por qualquer um
+const PUBLIC = ['index.html', 'style.css', 'game.js', 'multiplayer-client.js', 'br-game.js'];
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-app.get('/multiplayer-client.js', (req, res) => res.sendFile(path.join(__dirname, 'multiplayer-client.js')));
-app.get('/br-game.js', (req, res) => res.sendFile(path.join(__dirname, 'br-game.js')));
+for (const f of PUBLIC) app.get('/' + f, (req, res) => res.sendFile(path.join(__dirname, f)));
 const server = http.createServer(app);
 const io = new Server(server);
 
