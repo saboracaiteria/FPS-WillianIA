@@ -46,7 +46,7 @@ describe('BR — drops de morte e avatares remotos', { skip: !CHROME && 'Chrome 
   });
 });
 
-describe('BR — bonecos remotos no chão', { skip: !CHROME && 'Chrome não encontrado' }, () => {
+describe('BR — bonecos remotos, zona e nave', { skip: !CHROME && 'Chrome não encontrado' }, () => {
   let h, bot;
   before(async () => {
     h = await bootGame({ port: 3182, extraEnv: { COUNTDOWN_S: '1', NEXT_IN_S: '120' } });
@@ -92,5 +92,49 @@ describe('BR — bonecos remotos no chão', { skip: !CHROME && 'Chrome não enco
     });
     assert.ok(!r.vivo, 'roster não marcou o remoto como morto');
     assert.ok(r.sumiu, 'boneco morto continuou de pé (estátua)');
+  });
+});
+
+describe('BR — indicadores da zona e cabine da nave', { skip: !CHROME && 'Chrome não encontrado' }, () => {
+  let h, bot;
+  before(async () => {
+    h = await bootGame({ port: 3181, extraEnv: { COUNTDOWN_S: '1', NEXT_IN_S: '120' } });
+    bot = await startBRMatch(h);
+  });
+  after(async () => {
+    if (bot) bot.close();
+    if (h) await h.close();
+  });
+
+  it('dado o jogador FORA da safe, então a tela avermelha — e limpa ao voltar', async t => {
+    const r = await h.play(async () => {
+      const QA = window.QA, dbg = window.__BR_debug, P = QA.MP.player;
+      const zc = dbg.zc;
+      // fora da zona (bem além do raio atual)
+      const ang = 0.7;
+      P.pos.set(zc.x + Math.cos(ang) * (zc.r + 80), 5, zc.z + Math.sin(ang) * (zc.r + 80));
+      P.invulnUntil = QA.MP.state.gameTime + 999; // não morrer durante a medição
+      await new Promise(rr => setTimeout(rr, 1400)); // brTick atualiza a cada 0.5s
+      const foraOpacity = document.getElementById('gasTint').style.opacity;
+      P.pos.set(zc.x, QA.MP.groundAt(zc.x, zc.z, 999), zc.z); // centro da safe
+      await new Promise(rr => setTimeout(rr, 1400));
+      const dentroOpacity = document.getElementById('gasTint').style.opacity;
+      P.invulnUntil = 0;
+      return { foraOpacity, dentroOpacity };
+    });
+    assert.equal(r.foraOpacity, '1', 'tela não avermelhou fora da safe');
+    assert.equal(r.dentroOpacity, '0', 'tinta vermelha não limpou dentro da safe');
+  });
+
+  it('dada a nave, então ela tem cabine com janela de vidro no chão', async t => {
+    const r = await h.play(() => {
+      const ship = window.__BR_debug.ship;
+      if (!ship) return null;
+      const janela = ship.g.getObjectByName('cabineJanela');
+      return { temJanela: !!janela, filhos: ship.g.children.length };
+    });
+    if (!r) { t.skip('nave ainda não construída'); return; }
+    assert.ok(r.temJanela, 'janela do chão da cabine sumiu');
+    assert.ok(r.filhos >= 15, `cabine incompleta (${r.filhos} peças)`);
   });
 });

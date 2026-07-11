@@ -274,6 +274,30 @@
       }
       const beam = new THREE.PointLight(0x2dd6c4, 3.2, 60, 1.6);
       beam.position.y = -4; g.add(beam);
+      /* ---- CABINE INTERNA: os jogadores viajam DENTRO da nave ----
+         parede/teto escuros (BackSide: visíveis só por dentro) e um piso
+         anelar com JANELA de vidro no centro — dá pra olhar o mapa lá embaixo
+         (o casco por baixo é face frontal → invisível de dentro, sem furo real) */
+      const mWall = new THREE.MeshStandardMaterial({ color: 0x161d27, roughness: 0.85, metalness: 0.35, side: THREE.BackSide });
+      const wall = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 2.4, 24, 1, true), mWall);
+      wall.position.y = 0.2; g.add(wall);
+      const teto = new THREE.Mesh(new THREE.CircleGeometry(8, 24),
+        new THREE.MeshStandardMaterial({ color: 0x0e1a22, roughness: 0.9, side: THREE.DoubleSide }));
+      teto.rotation.x = Math.PI / 2; teto.position.y = 1.35; g.add(teto);
+      const piso = new THREE.Mesh(new THREE.RingGeometry(3.1, 8, 32),
+        new THREE.MeshStandardMaterial({ color: 0x232c38, roughness: 0.7, metalness: 0.25, side: THREE.DoubleSide }));
+      piso.rotation.x = -Math.PI / 2; piso.position.y = -0.95; g.add(piso);
+      const janela = new THREE.Mesh(new THREE.CircleGeometry(3.1, 32),
+        new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false }));
+      janela.name = 'cabineJanela';
+      janela.rotation.x = -Math.PI / 2; janela.position.y = -0.97; g.add(janela);
+      const aro = new THREE.Mesh(new THREE.TorusGeometry(3.15, 0.09, 8, 40),
+        new THREE.MeshStandardMaterial({ color: 0x0a2e28, emissive: 0x2dd6c4, emissiveIntensity: 1.8 }));
+      aro.rotation.x = Math.PI / 2; aro.position.y = -0.9; g.add(aro);
+      const luzTeto = new THREE.PointLight(0x6fe8d8, 1.7, 20, 1.4);
+      luzTeto.position.y = 1.1; g.add(luzTeto);
+      const luzJanela = new THREE.PointLight(0x9fd8ff, 0.8, 12, 1.6);
+      luzJanela.position.y = -0.5; g.add(luzJanela);
       MP.scene.add(g);
       return { g, ring };
     }
@@ -419,16 +443,21 @@
     }
     function drawZoneMap() {
       const c2 = UI.zoneMapC.getContext('2d');
-      const Ssz = 160;
+      const Ssz = UI.zoneMapC.width;
       const W = (v) => (v + LIM) / (2 * LIM) * Ssz;
+      const P = MP.player.pos;
+      const fora = S.plan && Math.hypot(P.x - zc.x, P.z - zc.z) > zc.r;
       c2.clearRect(0, 0, Ssz, Ssz);
-      c2.fillStyle = 'rgba(20,30,26,.85)';
+      // fundo: avermelha quando VOCÊ está fora da safe
+      c2.fillStyle = fora && S.phase === 'PLAY' ? 'rgba(70,18,14,.9)' : 'rgba(20,30,26,.85)';
       c2.fillRect(0, 0, Ssz, Ssz);
-      // círculo atual (branco) e próximo (verde)
       if (S.plan) {
-        c2.strokeStyle = 'rgba(255,255,255,.85)'; c2.lineWidth = 1.6;
+        // área SAFE preenchida (clara) + borda branca
+        c2.fillStyle = 'rgba(160,255,190,.14)';
+        c2.beginPath(); c2.arc(W(zc.x), W(zc.z), zc.r / (2 * LIM) * Ssz, 0, Math.PI * 2); c2.fill();
+        c2.strokeStyle = 'rgba(255,255,255,.9)'; c2.lineWidth = 1.6;
         c2.beginPath(); c2.arc(W(zc.x), W(zc.z), zc.r / (2 * LIM) * Ssz, 0, Math.PI * 2); c2.stroke();
-        c2.strokeStyle = 'rgba(126,224,129,.9)'; c2.lineWidth = 1.2;
+        c2.strokeStyle = 'rgba(126,224,129,.95)'; c2.lineWidth = 1.3;
         c2.beginPath(); c2.arc(W(zc.nx), W(zc.nz), zc.nr / (2 * LIM) * Ssz, 0, Math.PI * 2); c2.stroke();
         if (S.phase === 'SHIP' || S.phase === 'FALL') { // rota da nave
           c2.strokeStyle = 'rgba(45,214,196,.7)';
@@ -439,14 +468,31 @@
           c2.stroke();
           c2.setLineDash([]);
         }
+        if (fora) { // seta VOCÊ → safe (caminho mais curto)
+          const ang = Math.atan2(zc.z - P.z, zc.x - P.x);
+          const px = W(P.x), pz = W(P.z);
+          const bx = W(zc.x + Math.cos(ang + Math.PI) * zc.r), bz = W(zc.z + Math.sin(ang + Math.PI) * zc.r);
+          c2.strokeStyle = 'rgba(255,90,70,.95)'; c2.lineWidth = 2;
+          c2.setLineDash([4, 3]);
+          c2.beginPath(); c2.moveTo(px, pz); c2.lineTo(bx, bz); c2.stroke();
+          c2.setLineDash([]);
+        }
       }
       if (boss && boss.alive) {
         c2.fillStyle = '#ffb03c';
         c2.fillRect(W(boss.group.position.x) - 2.5, W(boss.group.position.z) - 2.5, 5, 5);
       }
-      const P = MP.player.pos;
-      c2.fillStyle = '#ff5252';
-      c2.beginPath(); c2.arc(W(P.x), W(P.z), 3, 0, Math.PI * 2); c2.fill();
+      // VOCÊ: triângulo apontando pra onde a câmera olha, com contorno
+      _eul.setFromQuaternion(MP.camera.quaternion);
+      const yaw = -_eul.y; // canvas: +z pra baixo
+      c2.save();
+      c2.translate(W(P.x), W(P.z));
+      c2.rotate(yaw);
+      c2.fillStyle = fora ? '#ff5f4a' : '#7fffb0';
+      c2.strokeStyle = 'rgba(0,0,0,.8)'; c2.lineWidth = 1.5;
+      c2.beginPath(); c2.moveTo(0, -6.5); c2.lineTo(4.5, 5); c2.lineTo(0, 2.4); c2.lineTo(-4.5, 5); c2.closePath();
+      c2.fill(); c2.stroke();
+      c2.restore();
     }
 
     /* =============== baús =============== */
@@ -836,6 +882,7 @@
       S.matchNum = d.num;
       S.myKills = 0; S.myPlacement = 0; recapShown = false; myDeathInfo = null;
       bossDeadFlag = !S.flags.golem; // GOLEM desligado pela regra da sala: nem constrói
+      window.__BR_zumbis = !!S.flags.zumbis;
       bossHp = bossMaxHp = d.plan.boss.hp;
       beginMatch(false);
     });
@@ -1154,8 +1201,8 @@
         const sp = S.plan.ship;
         ship.g.rotation.y = Math.atan2(sp.to[0] - sp.from[0], sp.to[1] - sp.from[1]);
         if (S.phase === 'SHIP') {
-          // em cima do disco (antes ficava 4m ABAIXO do casco: ninguém via a nave, só gente flutuando)
-          MP.player.pos.set(_shipV.x + seatOx, _shipV.y + 1.35, _shipV.z + seatOz);
+          // DENTRO da cabine: pés no piso interno, todo mundo ao redor da janela
+          MP.player.pos.set(_shipV.x + seatOx, _shipV.y - 0.95, _shipV.z + seatOz);
           MP.player.vel.set(0, 0, 0);
           if (tm >= sp.flyTime) jumpFromShip(); // fim da rota: todo mundo pula
           UI.hint(`🛸 NA NAVE — [ESPAÇO] pra pular · auto em ${Math.max(0, sp.flyTime - tm).toFixed(0)}s`);
@@ -1181,7 +1228,9 @@
           dmgAcc = 0;
           const P = MP.player.pos;
           const dz = Math.hypot(P.x - zc.x, P.z - zc.z);
-          if (S.phase === 'PLAY' && !MP.player.dead && dz > zc.r)
+          const fora = S.phase === 'PLAY' && !MP.player.dead && dz > zc.r;
+          UI.gasTint.style.opacity = fora ? '1' : '0'; // tela avermelha FORA da safe
+          if (fora)
             MP.playerDamage(zc.dps * 0.5, null); // se alguém me feriu há pouco, a kill ainda é dele
         }
       }
@@ -1229,6 +1278,7 @@
     /* hook de depuração/testes (inofensivo em produção) */
     window.__BR_debug = {
       S, zc, crates, remotes, drops,
+      get ship() { return ship; },
       jump: jumpFromShip, spect: enterSpectator, openCrate: tryOpenCrate,
       get boss() { return boss; }, get bossHp() { return bossHp; },
       get bullets() { return bullets.length; },

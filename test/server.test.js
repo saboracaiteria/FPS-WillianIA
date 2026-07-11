@@ -476,6 +476,33 @@ describe('Regras da sala (flags do anfitrião)', () => {
     assert.equal(r.ok, false, 'baú lendário abriu sem GOLEM na sala');
   });
 
+  it('dados bots e zumbis nas flags, então sanitiza (teto 8, booleano) e bots ENTRAM na sala', async t => {
+    const srv = await spawnServer(); t.after(() => srv.stop());
+    const a = await connect(srv.port); t.after(() => a.s.close());
+    await ack(a.s, 'claimHost', { code: 'QA123' });
+    const recebidas = collect(a.s, 'flags');
+    const rosters = collect(a.s, 'roster');
+    a.s.emit('setFlags', { bots: 99, zumbis: 'sim' });   // lixo
+    await sleep(300);
+    let f = recebidas[recebidas.length - 1];
+    assert.equal(f.bots, 8, 'teto de bots não aplicou');
+    assert.equal(f.zumbis, false, 'zumbis não-booleano passou');
+    a.s.emit('setFlags', { bots: 2, zumbis: true });
+    // processo de bots sobe e conecta — polling até 12s (máquina carregada)
+    let entraram = false;
+    for (let i = 0; i < 40 && !entraram; i++) {
+      await sleep(300);
+      const ultimo = rosters[rosters.length - 1];
+      entraram = !!ultimo && ultimo.players.length >= 3;
+    }
+    f = recebidas[recebidas.length - 1];
+    assert.equal(f.bots, 2);
+    assert.equal(f.zumbis, true);
+    assert.ok(entraram, 'bots não entraram na sala em 12s');
+    a.s.emit('setFlags', { bots: 0 }); // desliga (mata o processo filho)
+    await sleep(400);
+  });
+
   it('dado ciclo inválido no setFlags, então é ignorado (sanitização)', async t => {
     const srv = await spawnServer(); t.after(() => srv.stop());
     const a = await connect(srv.port); t.after(() => a.s.close());

@@ -1646,7 +1646,7 @@ function tick(forceDt) {
   Heli.update(dt, t);
   if (!window.__BR_active) Enemies.update(dt, t); // BR: sem inimigos comuns
   Animals.update(dt, t);
-  if (!window.__BR_active) Night.update(dt, t);   // BR: sem zumbis/fantasmas
+  if (!window.__BR_active || window.__BR_zumbis) Night.update(dt, t); // BR: zumbis só se a sala ligar
   Grenades.update(dt, t);
   Rockets.update(dt, t);
   Pickups.update(dt, t);

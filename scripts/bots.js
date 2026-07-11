@@ -88,5 +88,15 @@ setInterval(() => {
   }
 }, 100);
 
+/* watchdog: servidor caiu → bots saem sozinhos (sem processos órfãos) */
+setTimeout(() => {
+  setInterval(() => {
+    if (bots.every(x => x.s.disconnected)) {
+      console.log('[bots] servidor fora do ar — encerrando');
+      process.exit(0);
+    }
+  }, 4000);
+}, 12000);
+
 console.log(`${N} bots conectando em ${URL} — inicie a partida pelo lobby (você é o anfitrião).`);
 console.log('Obs.: bots atiram entre si; quem atirar NELES tira vida deles de verdade.');

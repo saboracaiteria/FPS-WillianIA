@@ -71,7 +71,7 @@
       .brPanel { position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center;
         background: rgba(5,9,14,.88); backdrop-filter: blur(6px); color: #e8f1f8; font-family: system-ui, sans-serif; }
       .brCard { background: rgba(14,20,28,.95); border: 1px solid rgba(255,255,255,.14); border-radius: 14px;
-        padding: 26px 32px; min-width: 560px; max-width: 800px; max-height: 88vh; overflow: auto; }
+        padding: 26px 32px; min-width: 560px; max-width: 880px; max-height: 92vh; overflow: auto; }
       .brTitle { font-size: 26px; font-weight: 800; letter-spacing: 6px; color: #ffd76a; text-align: center; }
       .brSub { text-align: center; opacity: .7; font-size: 12px; letter-spacing: 3px; margin: 4px 0 14px; }
       .brRow { display: flex; gap: 20px; align-items: flex-start; }
@@ -82,6 +82,18 @@
       .brBtn:disabled { background: #3a4250; color: #8a94a3; cursor: default; }
       .brInput { width: 100%; padding: 8px 10px; background: rgba(255,255,255,.08); color: #fff;
         border: 1px solid rgba(255,255,255,.18); border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+      select.brInput { background: #131a24; }
+      .brInput option { background: #131a24; color: #e8f1f8; }
+      #brFlags label { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+      #brFlags input[type=checkbox] { accent-color: #ffd76a; width: 15px; height: 15px; }
+      #brFlags select { width: auto; padding: 4px 8px; }
+      .brKeys { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 16px;
+        font-size: 11.5px; opacity: .9; line-height: 1.7; }
+      .brKeys b { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.16);
+        border-radius: 4px; padding: 0 6px; font-weight: 700; }
+      #gasTint { position: fixed; inset: 0; pointer-events: none; z-index: 35; opacity: 0;
+        transition: opacity .6s; background: radial-gradient(ellipse at center,
+        rgba(255,40,20,0) 42%, rgba(220,30,10,.38) 100%); }
       .brPlayers div { padding: 3px 0; font-size: 13px; display: flex; align-items: center; gap: 8px; }
       .brDot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: none; }
       .brCount { font-size: 62px; font-weight: 800; color: #ffd76a; text-align: center; margin: 4px 0; }
@@ -137,8 +149,9 @@
     const div = (id, parent) => { const d = document.createElement('div'); if (id) d.id = id; (parent || document.body).appendChild(d); return d; };
     const topBar = div('brTop');
     topBar.innerHTML = `<div class="pill" id="brAlive">—</div><div class="pill" id="brZonePill">—</div>`;
+    const gasTint = div('gasTint');
     const zoneMapC = document.createElement('canvas');
-    zoneMapC.id = 'brZoneMap'; zoneMapC.width = 160; zoneMapC.height = 160;
+    zoneMapC.id = 'brZoneMap'; zoneMapC.width = 190; zoneMapC.height = 190;
     document.body.appendChild(zoneMapC);
     const rosterBox = div('brRoster');
     const chatBox = div('brChat');
@@ -151,7 +164,7 @@
     const toastBox = div('brToast');
 
     const UI = {
-      topBar, zoneMapC, rosterBox, bossBar, spectBar, hintBox,
+      topBar, zoneMapC, rosterBox, bossBar, spectBar, hintBox, gasTint,
       pillAlive: document.getElementById('brAlive'),
       pillZone: document.getElementById('brZonePill'),
       bossFill: document.getElementById('brBossFill'),
@@ -237,23 +250,29 @@
               pro loot lendário, fuja do <b>gás</b> e seja o último vivo. 🏆
             </div>
             <div class="brH">CONTROLES</div>
-            <div style="font-size:11.5px;opacity:.85;line-height:1.75;columns:2;column-gap:14px">
-              <b>WASD</b> mover · <b>SHIFT</b> correr<br>
-              <b>ESPAÇO</b> pular / paraquedas<br>
-              <b>CTRL</b> agachar / deslizar<br>
-              <b>🖱 esq/dir</b> atirar / mirar<br>
-              <b>R</b> recarregar · <b>1-6</b> armas<br>
-              <b>G</b> granada · <b>Q</b> kit médico<br>
-              <b>F</b> comer carne · <b>T</b> mira<br>
-              <b>E</b> veículo / baú · <b>TAB</b> inventário<br>
-              <b>ENTER</b> chat da sala
+            <div class="brKeys">
+              <span><b>WASD</b> mover</span><span><b>SHIFT</b> correr</span>
+              <span><b>ESPAÇO</b> pular/paraquedas</span><span><b>CTRL</b> agachar/deslizar</span>
+              <span><b>🖱</b> atirar · dir. mirar</span><span><b>R</b> recarregar</span>
+              <span><b>1-6</b> armas (ou scroll)</span><span><b>G</b> granada</span>
+              <span><b>Q</b> kit médico</span><span><b>F</b> comer carne</span>
+              <span><b>E</b> veículo / baú</span><span><b>T</b> troca de mira</span>
+              <span><b>TAB</b> inventário</span><span><b>ENTER</b> chat da sala</span>
             </div>
             <div class="brH">REGRAS DA SALA <span style="opacity:.5">(só o anfitrião altera)</span></div>
-            <div id="brFlags" style="font-size:12.5px;line-height:2">
-              <label style="display:block"><input type="checkbox" id="fgGolem"> GOLEM da fortaleza</label>
-              <label style="display:block"><input type="checkbox" id="fgAnimais"> Animais no mapa</label>
-              <label style="display:block">Ciclo:
-                <select id="fgCiclo" class="brInput" style="width:auto;padding:3px 6px">
+            <div id="brFlags" style="font-size:12.5px;line-height:1.9">
+              <label><input type="checkbox" id="fgGolem"> GOLEM da fortaleza</label>
+              <label><input type="checkbox" id="fgAnimais"> Animais no mapa</label>
+              <label><input type="checkbox" id="fgZumbis"> Zumbis à noite ☠</label>
+              <label>Bots na sala:
+                <select id="fgBots" class="brInput">
+                  <option value="0">nenhum</option>
+                  <option value="2">2</option>
+                  <option value="4">4</option>
+                  <option value="8">8</option>
+                </select></label>
+              <label>Ciclo:
+                <select id="fgCiclo" class="brInput">
                   <option value="auto">dia e noite</option>
                   <option value="dia">sempre dia</option>
                   <option value="noite">sempre noite</option>
@@ -323,20 +342,23 @@
       const btn = document.getElementById('brStartBtn');
       if (btn) btn.addEventListener('click', () => socket.emit('requestStart'));
       const fg = { golem: document.getElementById('fgGolem'),
-        animais: document.getElementById('fgAnimais'), ciclo: document.getElementById('fgCiclo') };
+        animais: document.getElementById('fgAnimais'), zumbis: document.getElementById('fgZumbis'),
+        bots: document.getElementById('fgBots'), ciclo: document.getElementById('fgCiclo') };
       const syncFlagsUI = () => {
         const isHost = INIT.id === S.hostId;
         if (fg.golem) { fg.golem.checked = S.flags.golem; fg.golem.disabled = !isHost; }
         if (fg.animais) { fg.animais.checked = S.flags.animais; fg.animais.disabled = !isHost; }
+        if (fg.zumbis) { fg.zumbis.checked = !!S.flags.zumbis; fg.zumbis.disabled = !isHost; }
+        if (fg.bots) { fg.bots.value = String(S.flags.bots || 0); fg.bots.disabled = !isHost; }
         if (fg.ciclo) { fg.ciclo.value = S.flags.ciclo; fg.ciclo.disabled = !isHost; }
       };
       window.__BR_syncFlagsUI = syncFlagsUI;
       syncFlagsUI();
       const sendFlags = () => socket.emit('setFlags',
-        { golem: fg.golem.checked, animais: fg.animais.checked, ciclo: fg.ciclo.value });
-      if (fg.golem) fg.golem.addEventListener('change', sendFlags);
-      if (fg.animais) fg.animais.addEventListener('change', sendFlags);
-      if (fg.ciclo) fg.ciclo.addEventListener('change', sendFlags);
+        { golem: fg.golem.checked, animais: fg.animais.checked, zumbis: fg.zumbis.checked,
+          bots: +fg.bots.value, ciclo: fg.ciclo.value });
+      for (const k of ['golem', 'animais', 'zumbis', 'bots', 'ciclo'])
+        if (fg[k]) fg[k].addEventListener('change', sendFlags);
       const hIn = document.getElementById('brHostCode'), hBtn = document.getElementById('brHostBtn');
       if (hBtn) hBtn.addEventListener('click', () => claimHost(hIn.value));
       if (hIn) hIn.addEventListener('keydown', e => { if (e.key === 'Enter') claimHost(hIn.value); });

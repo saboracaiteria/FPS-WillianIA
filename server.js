@@ -105,7 +105,7 @@ const match = {
   dropSeq: 0,
   bossHp: 0, bossMaxHp: 0, bossDead: false,
   carOwners: {},             // idx do veículo -> socket.id (posse arbitrada aqui)
-  flags: { golem: true, animais: true, ciclo: 'auto' }, // regras da sala (só o host altera)
+  flags: { golem: true, animais: true, zumbis: false, bots: 0, ciclo: 'auto' }, // regras da sala (só o host altera)
   countdownTimer: null, endTimer: null,
 };
 
@@ -399,7 +399,12 @@ io.on('connection', socket => {
     if (socket.id !== hostId || !d) return;
     if (typeof d.golem === 'boolean') match.flags.golem = d.golem;
     if (typeof d.animais === 'boolean') match.flags.animais = d.animais;
+    if (typeof d.zumbis === 'boolean') match.flags.zumbis = d.zumbis;
     if (['auto', 'dia', 'noite'].includes(d.ciclo)) match.flags.ciclo = d.ciclo;
+    if (Number.isInteger(d.bots)) {
+      const n = Math.max(0, Math.min(8, d.bots));
+      if (n !== match.flags.bots) { match.flags.bots = n; syncBots(); }
+    }
     io.emit('flags', match.flags);
   });
 
@@ -644,12 +649,28 @@ io.on('connection', socket => {
   });
 });
 
+/* ---------------- bots gerenciados (flag do anfitrião) ----------------
+   sobe/derruba um processo filho rodando scripts/bots.js apontando pra
+   este servidor — os bots entram na sala como jogadores de verdade */
+const PORT = process.env.PORT || 3000;
+let botsProc = null;
+function syncBots() {
+  if (botsProc) { try { botsProc.kill(); } catch (e) { /* já morto */ } botsProc = null; }
+  const n = match.flags.bots | 0;
+  if (n > 0 && require.main === module) {
+    botsProc = require('child_process').spawn(process.execPath,
+      [path.join(__dirname, 'scripts', 'bots.js'), String(n), `http://localhost:${PORT}`],
+      { stdio: 'ignore' });
+    console.log(`[BOTS] ${n} bots entrando na sala`);
+  }
+}
+process.on('exit', () => { if (botsProc) try { botsProc.kill(); } catch (e) { /* ok */ } });
+
 /* internos expostos pra suite de QA; o listen só roda quando executado
    direto (node server.js) — require() nos testes não abre porta */
 module.exports = { buildPlan, zoneAt, rollChest, mulberry32, LIM, rankEntry, pruneRank, topRank };
 
 if (require.main === module) {
-  const PORT = process.env.PORT || 3000;
   server.listen(PORT, () => {
     console.log(`Servidor BR no ar em http://localhost:${PORT} · seed inicial ${match.seed}`);
     console.log('====================================================');
