@@ -70,10 +70,12 @@ describe('Loot dos baús (unidade)', () => {
 
 describe('Ranking global (unidade)', () => {
   it('dado um ranking inflado por 1200 nicks, então o prune segura em 500 e preserva o topo', () => {
-    for (let i = 0; i < 1200; i++) rankEntry('Inflado' + i).points = i;
+    // pontos MUITO acima de qualquer jogador real: o br-rank.json do disco é
+    // carregado junto e não pode disputar o topo com os nicks do teste
+    for (let i = 0; i < 1200; i++) rankEntry('Inflado' + i).points = 100000 + i;
     const restaram = pruneRank();
     assert.equal(restaram, 500);
     const top = topRank(3);
-    assert.equal(top[0].points, 1199, 'prune jogou fora o líder');
+    assert.equal(top[0].points, 101199, 'prune jogou fora o líder');
   });
 });

@@ -298,6 +298,9 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
       e.group.position.set(40, QA.MP.heightAt(40, 28), 28); // 12m à frente, área plana
       e.fsm = 'PATRULHA';
       e.alertT = 0; e.losT = 0;
+      // patrulha só enxerga dentro do cone de visão: aponta o inimigo pro
+      // jogador (o yaw herdado varia com quanto a IA andou nos testes antes)
+      e.yaw = Math.atan2(P.pos.x - 40, P.pos.z - 28);
       window.__BR_active = false; // liga a IA só neste teste
       const hp0 = P.health;
       QA.tick(300); // 5s de jogo
