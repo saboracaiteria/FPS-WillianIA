@@ -34,6 +34,7 @@
     let warheads = [];        // { m, from, to }
     let impactApplied = false;
     let impactTimer = null;
+    let boom = null;          // explosão do impacto (fireballs/anéis/luz)
     let trailAcc = 0, smokeAcc = 0, shakeT = 0;
     let releasePlayed = false;
 
@@ -168,6 +169,7 @@
       running = false;
       done = cd.eventId;
       clearTimeout(impactTimer);
+      disposeBoom();
       disposeEventMeshes();
       MP.state.cinematic = false;
       MP.camera.fov = rig ? rig.fov : 75;
@@ -187,11 +189,62 @@
       setTimeout(() => { flash.style.opacity = '0'; }, 160);
       shakeT = 1.4;
       try { MP.SFX.cityImpact(); setTimeout(() => { try { MP.SFX.distantRumble(); } catch (e) {} }, 1300); } catch (e) {}
+      // EXPLOSÃO: bola de fogo + anel de choque por ponto de impacto + clarão
+      // na cidade — animados por relógio no tickCinematic (boomFx)
+      boom = new THREE.Group();
+      boom.name = 'cityBoom';
       for (const p2 of ev.impacts) {
-        _v.set(p2.x, MP.heightAt(p2.x, p2.z) + 1.5, p2.z);
+        const gy = MP.heightAt(p2.x, p2.z);
+        const fb = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8),
+          new THREE.MeshBasicMaterial({ color: 0xffa03a, transparent: true, opacity: 0.95 }));
+        fb.position.set(p2.x, gy + 4, p2.z);
+        fb.userData.boom = 'fogo';
+        boom.add(fb);
+        const anel = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.35, 28),
+          new THREE.MeshBasicMaterial({ color: 0xffd2a0, transparent: true, opacity: 0.8,
+            side: THREE.DoubleSide, depthWrite: false }));
+        anel.rotation.x = -Math.PI / 2;
+        anel.position.set(p2.x, gy + 0.5, p2.z);
+        anel.userData.boom = 'anel';
+        boom.add(anel);
+        _v.set(p2.x, gy + 1.5, p2.z);
         MP.FX.burst(_v, _w.set(0, 1, 0), 'spark');
         MP.FX.burst(_v, _w.set(0, 1, 0), 'dirt');
       }
+      const luz = new THREE.PointLight(0xff8a3c, 7, 320, 1.4);
+      luz.position.set(CITY.x, MP.heightAt(CITY.x, CITY.z) + 18, CITY.z);
+      luz.userData.boom = 'luz';
+      boom.add(luz);
+      MP.scene.add(boom);
+    }
+    function tickBoom(el) {
+      if (!boom) return;
+      const bt = el - PH.impact; // segundos desde o impacto (relógio, não fps)
+      if (bt > 2.2) { disposeBoom(); return; }
+      for (const o of boom.children) {
+        if (o.userData.boom === 'fogo') {
+          const k = clamp01(bt / 0.9);
+          o.scale.setScalar(2 + 30 * ease(k));
+          o.material.opacity = 0.95 * (1 - k);
+          o.visible = k < 1;
+        } else if (o.userData.boom === 'anel') {
+          const k = clamp01(bt / 1.3);
+          o.scale.setScalar(1 + 44 * ease(k));
+          o.material.opacity = 0.8 * (1 - k);
+          o.visible = k < 1;
+        } else if (o.userData.boom === 'luz') {
+          o.intensity = 7 * Math.max(0, 1 - bt / 1.8);
+        }
+      }
+    }
+    function disposeBoom() {
+      if (!boom) return;
+      MP.scene.remove(boom);
+      boom.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) o.material.dispose();
+      });
+      boom = null;
     }
 
     /* ---------- timeline por frame ---------- */
@@ -199,6 +252,7 @@
       const el = (clockNow() - cd.cinematicStartedAt) / 1000;
       if (el >= PH.impact && !impactApplied) applyImpact();
       if (el >= PH.aftermath[1]) { endCinematic(); return; }
+      tickBoom(el);
 
       /* mísseis: chegam ao ponto de mergulho exatamente no impacto */
       const mt = ease(clamp01(el / PH.impact));

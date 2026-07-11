@@ -271,6 +271,9 @@ function endMatch(winnerId) {
   });
   sysChat(w ? `🏆 ${w.nick} VENCEU a partida #${match.num} com ${w.kills} kills!` : 'Partida encerrada sem sobreviventes.');
   console.log(`[MATCH ${match.num}] vencedor: ${w ? w.nick : '(ninguém)'}`);
+  // evento consumado morre com a partida: init do lobby seguinte não pode
+  // carregar 'destroyed' antigo (cliente recarrega e nasceria em ruínas)
+  match.cityDestruction = { eventId: null, seed: null, state: 'intact', cinematicStartedAt: null, impactAt: null };
   match.endTimer = setTimeout(() => {
     match.seed = (Math.random() * 0xFFFFFFFF) >>> 0; // MAPA NOVO
     match.phase = 'LOBBY';

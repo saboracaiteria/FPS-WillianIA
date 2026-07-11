@@ -217,6 +217,25 @@ describe('Destruição da cidade — servidor autoritativo', () => {
     assert.equal(mortes.filter(m => m.byCity).length, 0, 'cliente escolheu vítima');
   });
 
+  it('dado o FIM da partida, então o init do lobby seguinte volta com cidade intacta (nada de ruínas herdadas)', async t => {
+    // bug de playtest: nextMatch recarrega a página e o init ainda trazia
+    // cityDestruction 'destroyed' da partida anterior -> lobby nascia em ruínas
+    const { srv, cs } = await partida(t, 2);
+    const [a, b] = cs;
+    const iv = setInterval(() => {
+      a.s.volatile.emit('state', { pos: [-340, 4, 130], rotY: 0, car: -1 }); // morre no míssil
+      b.s.volatile.emit('state', { pos: [200, 4, 200], rotY: 0, car: -1 });  // vence
+    }, 120);
+    t.after(() => clearInterval(iv));
+    const fim = new Promise(res => b.s.once('matchEnd', res));
+    await fim; // QA0 morto pelo míssil -> QA1 vence -> partida encerra
+    clearInterval(iv);
+    const novo = await connect(srv.port); t.after(() => novo.s.close());
+    assert.equal(novo.init.cityDestruction.state, 'intact',
+      'lobby pós-partida herdou a cidade destruída do evento anterior');
+    assert.equal(novo.init.cityDestruction.eventId, null);
+  });
+
   it('dada a sala esvaziada, então a próxima sessão volta com flag habilitada e cidade intacta', async t => {
     const srv = await spawnServer(); t.after(() => srv.stop());
     const a = await connect(srv.port);

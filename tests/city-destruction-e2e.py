@@ -121,9 +121,15 @@ def enter_ground(page, x, z):
         window.__e2e_cinOn = false;
         const city = window.__game.Structures.city;
         const origDestroy = city.destroy.bind(city);
+        window.__e2e_boom = false;
         city.destroy = () => {
             if (!window.__e2e_destroyedAt) window.__e2e_destroyedAt = Date.now();
             origDestroy();
+            // a explosão (cityBoom) entra na cena no MESMO task do destroy;
+            // microtask roda antes de timers (ela vive só 2,2s de relógio)
+            queueMicrotask(() => {
+                if (window.__MP.scene.getObjectByName('cityBoom')) window.__e2e_boom = true;
+            });
         };
         const iv = setInterval(() => {
             if (MP.state.cinematic === true) window.__e2e_cinOn = true;
@@ -349,6 +355,8 @@ def main():
             for pg, who in ((renato, 'Renato'), (william, 'William')):
                 st = pg.evaluate('() => window.__game.Structures.city.getState()')
                 check(f'cidade destruída para {who}', st == 'destroyed', st)
+            boom = william.evaluate('() => window.__e2e_boom === true')
+            check('explosão (fireball/anel de choque) apareceu no impacto', boom)
 
 
             vivo = william.evaluate('() => window.__MP.player.dead !== true')

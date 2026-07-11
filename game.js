@@ -621,6 +621,9 @@ document.addEventListener('mousemove', e => {
 
 controls.addEventListener('lock', () => {
   state.pointerLocked = true;
+  // lock funcionou: ESC volta a pausar normalmente (partida iniciada via
+  // socket nasce com lockFailed=true e deixava o ESC num limbo sem menu)
+  state.lockFailed = false;
   if (state.started) setPaused(false);
 });
 controls.addEventListener('unlock', () => {

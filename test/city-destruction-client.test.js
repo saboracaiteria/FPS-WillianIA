@@ -183,13 +183,27 @@ describe('Cinemática — jogador fora do raio sobrevive e recupera o controle',
 });
 
 describe('Morte por míssil — vítima dentro do raio + late join', { skip: !CHROME && 'Chrome não encontrado' }, () => {
-  let h, bot;
+  let h, bot, bot2, bot2iv;
   before(async () => {
     h = await bootGame({ port: 3177, extraEnv: { COUNTDOWN_S: '1', NEXT_IN_S: '300',
       CITY_DESTRUCTION_DELAY_MS: '5000', CITY_DESTRUCTION_IMPACT_DELAY_MS: '1500' } });
+    // 2º sobrevivente fora do raio: a vítima morre no míssil e a partida
+    // precisa continuar VIVA (fim de partida agora reseta o evento — correto)
+    const { io } = require('socket.io-client');
+    bot2 = io('http://localhost:3177', { transports: ['websocket'] });
+    await new Promise(r => bot2.once('init', r));
+    bot2.emit('hello', { nick: 'Sentinela' });
+    bot2.on('matchStart', () => {
+      bot2iv = setInterval(() => bot2.emit('state', { pos: [250, 3, -250], rotY: 0, car: -1 }), 2000);
+    });
     bot = await startBRMatch(h);
   });
-  after(async () => { if (bot) bot.close(); if (h) await h.close(); });
+  after(async () => {
+    clearInterval(bot2iv);
+    if (bot2) bot2.close();
+    if (bot) bot.close();
+    if (h) await h.close();
+  });
 
   it('dado o jogador NA cidade, então morre com a mensagem oficial e sem kill creditada', async t => {
     const r = await h.play(async () => {

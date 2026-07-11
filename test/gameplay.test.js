@@ -445,6 +445,32 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.t1 > r.t0, 'relógio do mundo parado');
   });
 
+  it('dada a partida iniciada via socket (sem clique), quando o mouse é capturado e o ESC solta, então o jogo PAUSA de verdade', async t => {
+    // bug de playtest: partida BR inicia com lockFailed=true e o ESC deixava
+    // o jogador num limbo — mouse solto, jogo correndo, sem menu de pausa
+    const r = await play(() => {
+      const QA = window.QA, MP = QA.MP;
+      const mockLock = el => {
+        Object.defineProperty(document, 'pointerLockElement',
+          { get: () => el, configurable: true });
+        document.dispatchEvent(new Event('pointerlockchange'));
+      };
+      MP.state.paused = false;
+      mockLock(document.body);   // jogador clicou: lock OK (controls usam body)
+      const lockou = MP.state.pointerLocked === true;
+      mockLock(null);            // apertou ESC: lock caiu
+      const pausou = MP.state.paused === true;
+      const overlayPausa = !document.getElementById('overlay').classList.contains('hidden');
+      // limpa: despausa pro resto da suite
+      MP.state.paused = false;
+      document.getElementById('overlay').classList.add('hidden');
+      return { lockou, pausou, overlayPausa };
+    });
+    assert.ok(r.lockou, 'evento de lock não registrou');
+    assert.ok(r.pausou, 'ESC não pausou a partida iniciada via socket');
+    assert.ok(r.overlayPausa, 'menu de pausa não apareceu no ESC');
+  });
+
   it('rede de segurança: nenhum erro de runtime acumulado durante toda a suite', async t => {
     const errs = await play(() => window.__game.errors.map(e => String(e && e.message || e)));
     assert.deepEqual(errs, [], `erros: ${errs.join(' | ')}`);
