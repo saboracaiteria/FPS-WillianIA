@@ -39,7 +39,7 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
     });
   })()`;
 
-  it('dada uma parede, então nenhum dos 4 lados é atravessável', async () => {
+  it('dada uma parede, então nenhum dos 4 lados é atravessável', async t => {
     const r = await play((fw) => {
       const QA = window.QA, P = QA.MP.player;
       const b = eval(fw);
@@ -58,18 +58,23 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
         QA.G.keys.KeyW = true;
         QA.tick(100);
         const v = L.eixo === 'x' ? P.pos.x : P.pos.z;
+        const distFace = Math.abs(v - L.limite);
         // do lado negativo o jogador deve ficar <= limite; do positivo, >=
         out.push({ lado: `${L.eixo}${L.sinal > 0 ? '+' : '-'}`,
           ok: L.sinal < 0 ? v <= L.limite - P.radius + 0.2 : v >= L.limite + P.radius - 0.2,
+          chegou: distFace < 1.6, // sem isto, ficar preso longe = falso positivo
           v: +v.toFixed(2), limite: +L.limite.toFixed(2) });
       }
       return out;
     }, findWall);
-    if (!r) return;
-    for (const L of r) assert.ok(L.ok, `atravessou pelo lado ${L.lado}: pos=${L.v} limite=${L.limite}`);
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
+    for (const L of r) {
+      assert.ok(L.chegou, `jogador nem chegou na parede pelo lado ${L.lado} (pos=${L.v}) — teste vazio`);
+      assert.ok(L.ok, `atravessou pelo lado ${L.lado}: pos=${L.v} limite=${L.limite}`);
+    }
   });
 
-  it('dado um jogador teleportado pra DENTRO da parede, então é expelido', async () => {
+  it('dado um jogador teleportado pra DENTRO da parede, então é expelido', async t => {
     const r = await play((fw) => {
       const QA = window.QA, P = QA.MP.player;
       const b = eval(fw);
@@ -82,11 +87,11 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
                      P.pos.z > b.z0 + P.radius - 0.05 && P.pos.z < b.z1 - P.radius + 0.05;
       return { dentro, pos: [+P.pos.x.toFixed(2), +P.pos.z.toFixed(2)] };
     }, findWall);
-    if (!r) return;
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
     assert.ok(!r.dentro, `continuou dentro da parede em ${r.pos}`);
   });
 
-  it('dado um andar de prédio (floorY), então o jogador pousa nele — não no terreno', async () => {
+  it('dado um andar de prédio (floorY), então o jogador pousa nele — não no terreno', async t => {
     const r = await play(() => {
       const QA = window.QA, P = QA.MP.player;
       const camp = (QA.G.Structures.enemyCamps || []).find(c => c.floorY !== undefined &&
@@ -98,12 +103,12 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
       QA.tick(120);
       return { y: P.pos.y, floorY: camp.floorY, terreno: QA.MP.heightAt(camp.x, camp.z) };
     });
-    if (!r) return;
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
     assert.ok(Math.abs(r.y - r.floorY) < 0.7,
       `não pousou no andar: y=${r.y.toFixed(2)} andar=${r.floorY.toFixed(2)} terreno=${r.terreno.toFixed(2)}`);
   });
 
-  it('dada uma árvore/pedra, então o círculo de colisão empurra o jogador', async () => {
+  it('dada uma árvore/pedra, então o círculo de colisão empurra o jogador', async t => {
     const r = await play(() => {
       const QA = window.QA, P = QA.MP.player, G = QA.G;
       // acha um obstáculo varrendo o mapa (grade de 16m)
@@ -125,11 +130,33 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
       const d = Math.hypot(P.pos.x - ox, P.pos.z - oz);
       return { d, min: ob.r + P.radius };
     });
-    if (!r) return;
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
+    assert.ok(r.d < r.min + 1.4, `jogador nem chegou na árvore (d=${r.d.toFixed(2)}) — teste vazio`);
     assert.ok(r.d >= r.min - 0.15, `entrou na árvore: d=${r.d.toFixed(2)} mínimo=${r.min.toFixed(2)}`);
   });
 
-  it('dado um carro em disparada contra um prédio, então a física barra o carro', async () => {
+  it('dado um carro parado, então o jogador não passa por dentro dele', async t => {
+    const r = await play(() => {
+      const QA = window.QA, P = QA.MP.player, car = QA.G.Car.group.position;
+      // aproxima por -z: o caminho por -x roçava na fogueira do acampamento,
+      // que desviava o jogador ANTES do carro (falso-positivo pego por mutação)
+      QA.reset(car.x, car.z - 7);
+      QA.aimAt(car.x, car.y + 1, car.z);
+      QA.G.keys.KeyW = true;
+      // amostra a distância MÍNIMA no caminho: só olhar a posição final deixa
+      // passar quem ATRAVESSA o carro e para do outro lado (pego por mutação)
+      let minD = 1e9;
+      for (let i = 0; i < 120; i++) {
+        QA.tick(1);
+        minD = Math.min(minD, Math.hypot(P.pos.x - car.x, P.pos.z - car.z));
+      }
+      return { minD };
+    });
+    assert.ok(r.minD < 3.2, `jogador nem chegou no carro (minD=${r.minD.toFixed(2)}m) — teste vazio`);
+    assert.ok(r.minD > 1.5, `entrou/atravessou o chassi: minD=${r.minD.toFixed(2)}m`);
+  });
+
+  it('dado um carro em disparada contra um prédio, então a física barra o carro', async t => {
     const r = await play((fw) => {
       const QA = window.QA, G = QA.G;
       const b = eval(fw);
@@ -163,11 +190,11 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
       G.state.driving = false;
       return { passou: penetrou, x: +v.chassisBody.position.x.toFixed(2), limite: +b.x0.toFixed(2) };
     }, findWall);
-    if (!r) return;
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
     assert.ok(!r.passou, `carro atravessou o prédio: x=${r.x} parede=[${r.limite}..]`);
   });
 
-  it('dado um carro caindo no telhado de um prédio, então ele PARA no telhado (regressão do AABB)', async () => {
+  it('dado um carro caindo no telhado de um prédio, então ele PARA no telhado (regressão do AABB)', async t => {
     const r = await play(() => {
       const QA = window.QA, W = QA.MP.world;
       const wb = W.bodies.find(bd => bd.mass === 0 && bd.shapes[0] && bd.shapes[0].halfExtents &&
@@ -181,11 +208,11 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
       QA.tick(360);
       return { y: +v.chassisBody.position.y.toFixed(2), topo: +topo.toFixed(2) };
     });
-    if (!r) return;
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
     assert.ok(r.y > r.topo - 1, `carro atravessou o prédio na vertical: y=${r.y} telhado=${r.topo}`);
   });
 
-  it('dado um carro contra uma árvore, então o tronco segura o carro (regressão do AABB)', async () => {
+  it('dado um carro contra uma árvore, então o tronco segura o carro (regressão do AABB)', async t => {
     const r = await play(() => {
       const QA = window.QA, W = QA.MP.world, G = QA.G;
       // tronco: Box estático baixinho
@@ -211,11 +238,11 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
       G.state.driving = false;
       return { penetrou };
     });
-    if (!r) return;
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
     assert.ok(!r.penetrou, 'carro passou por DENTRO do tronco');
   });
 
-  it('dado o helicóptero descendo com tudo, então ele não afunda no terreno', async () => {
+  it('dado o helicóptero descendo com tudo, então ele não afunda no terreno', async t => {
     const r = await play(() => {
       const QA = window.QA, G = QA.G, P = QA.MP.player;
       QA.reset();
@@ -231,11 +258,11 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
       G.tryToggleCar(); // sai
       return { acima, y: +G.Heli.group.position.y.toFixed(2), chao: +gy.toFixed(2) };
     });
-    if (!r) return;
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
     assert.ok(r.acima, `heli afundou: y=${r.y} chão=${r.chao}`);
   });
 
-  it('dada uma parede entre atirador e alvo, então a bala NÃO atravessa', async () => {
+  it('dada uma parede entre atirador e alvo, então a bala NÃO atravessa', async t => {
     const r = await play((fw) => {
       const QA = window.QA, G = QA.G, P = QA.MP.player;
       const b = eval(fw);
@@ -258,11 +285,11 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
       e.group.position.set(-450, QA.MP.heightAt(-450, -450), -450);
       return { hp0, hp1: e.health };
     }, findWall);
-    if (!r) return;
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
     assert.equal(r.hp1, r.hp0, `bala atravessou a parede (hp ${r.hp0} -> ${r.hp1})`);
   });
 
-  it('dado segBlocked, então enxerga paredes e ignora campo aberto', async () => {
+  it('dado segBlocked, então enxerga paredes e ignora campo aberto', async t => {
     const r = await play((fw) => {
       const QA = window.QA, S = QA.G.Structures, THREE = QA.MP.THREE;
       const b = eval(fw);
@@ -272,12 +299,12 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
       const aberto = S.segBlocked(new THREE.Vector3(30, 60, 30), new THREE.Vector3(40, 60, 40));
       return { atravessa, aberto };
     }, findWall);
-    if (!r) return;
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
     assert.ok(r.atravessa, 'segBlocked não viu a parede');
     assert.ok(!r.aberto, 'segBlocked bloqueou campo aberto');
   });
 
-  it('dada uma explosão do outro lado da parede, então o splash NÃO vaza pro alvo', async () => {
+  it('dada uma explosão do outro lado da parede, então o splash NÃO vaza pro alvo', async t => {
     const r = await play((fw) => {
       const QA = window.QA, G = QA.G;
       const b = eval(fw);
@@ -301,12 +328,12 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
       e.group.position.set(-450, QA.MP.heightAt(-450, -450), -450);
       return { atras, aberto };
     }, findWall);
-    if (!r) return;
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
     assert.ok(r.aberto < 100, 'controle falhou: explosão em campo aberto não feriu');
     assert.equal(r.atras, 100, `splash vazou pela parede (hp ficou ${r.atras})`);
   });
 
-  it('dado um telhado de prédio da cidade, então dá pra POUSAR nele (pisável)', async () => {
+  it('dado um telhado de prédio da cidade, então dá pra POUSAR nele (pisável)', async t => {
     const r = await play((fw) => {
       const QA = window.QA, P = QA.MP.player;
       const b = eval(fw);
@@ -318,12 +345,12 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
       QA.tick(240);
       return { y: +P.pos.y.toFixed(2), telhado: +b.y1.toFixed(2) };
     }, findWall);
-    if (!r) return;
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
     assert.ok(Math.abs(r.y - r.telhado) < 0.8,
       `não pousou no telhado: y=${r.y} telhado=${r.telhado} (caiu/foi cuspido)`);
   });
 
-  it('dada uma granada jogada em cima do prédio, então ela quica e explode LÁ EM CIMA', async () => {
+  it('dada uma granada jogada em cima do prédio, então ela quica e explode LÁ EM CIMA', async t => {
     const r = await play((fw) => {
       const QA = window.QA, G = QA.G, P = QA.MP.player;
       const b = eval(fw);
@@ -342,13 +369,13 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
       QA.tick(280); // voo + fuse
       return { dano: +(100 - P.health).toFixed(1) };
     }, findWall);
-    if (!r) return;
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
     assert.ok(!r.skip, r.skip);
     assert.ok(r.dano > 4,
       `granada atravessou o telhado (explodiu 22m abaixo, dano=${r.dano})`);
   });
 
-  it('dado o heli voando contra um prédio, então ele NÃO atravessa', async () => {
+  it('dado o heli voando contra um prédio, então ele NÃO atravessa', async t => {
     const r = await play((fw) => {
       const QA = window.QA, G = QA.G;
       const b = eval(fw);
@@ -377,11 +404,11 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
       G.tryToggleCar(); // sai
       return { penetrou };
     }, findWall);
-    if (!r) return;
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
     assert.ok(!r.penetrou, 'helicóptero atravessou o prédio');
   });
 
-  it('dado o mundo com colisão de verdade, então nenhum carro nasce preso ou é ejetado (3 seeds)', async () => {
+  it('dado o mundo com colisão de verdade, então nenhum carro nasce preso ou é ejetado (3 seeds)', async t => {
     // seed do harness atual
     const local = await play(() => {
       const QA = window.QA, G = QA.G;
@@ -425,7 +452,7 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
     }
   });
 
-  it('dada a borda do mundo, então o jogador é contido nos limites', async () => {
+  it('dada a borda do mundo, então o jogador é contido nos limites', async t => {
     const r = await play(() => {
       const QA = window.QA, P = QA.MP.player;
       const lim = QA.MP.CFG.WORLD_SIZE * 0.49;
@@ -438,7 +465,7 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
     assert.ok(r.x <= r.lim + 0.01, `saiu do mundo: x=${r.x.toFixed(1)} limite=${r.lim}`);
   });
 
-  it('dado outro jogador (bot de rede real), então não dá pra ocupar o mesmo lugar', async () => {
+  it('dado outro jogador (bot de rede real), então não dá pra ocupar o mesmo lugar', async t => {
     // bot conecta no MESMO servidor e fica parado; o jogador anda até ele
     const bot = io(`http://localhost:${PORT}`, { transports: ['websocket'] });
     await new Promise(res => bot.once('init', res));
@@ -475,7 +502,8 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
         const d = Math.hypot(P.pos.x - rp.group.position.x, P.pos.z - rp.group.position.z);
         return { d };
       }, alvo);
-      if (!r) return; // remoto não apareceu (timing) — sem veredito
+      if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
+      assert.ok(r.d < 3.0, `jogador nem alcançou o outro (d=${r.d.toFixed(2)}m) — teste vazio`);
       assert.ok(r.d > 0.5, `ocupou o mesmo lugar do outro jogador: d=${r.d.toFixed(2)}m`);
     } finally {
       clearInterval(iv);

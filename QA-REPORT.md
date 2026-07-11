@@ -148,3 +148,26 @@ mortos do mundo físico; a fonte única é o loop do game.js com `updateAABB()`.
 proxy TCP de latência (+120ms/sentido) com 3 sentinelas de crash sob lag,
 posse de veículo arbitrada no servidor (mata a corrida do "mesmo carro")
 com 2 cenários, prune do ranking global (teto de 500) com teste de unidade.
+
+## Auditoria da própria suite (anti falso-positivo) + invariante das entidades
+
+**Mutação (`node scripts/mutation.js`)**: 10 correções quebradas de propósito —
+o teste correspondente TEM que ficar vermelho. Resultado final: **10/10
+mutantes mortos**. No caminho, a mutação capturou 2 problemas reais na suite:
+
+| Meta-bug | O que era | Correção |
+|----------|-----------|----------|
+| Teste engolido | O teste "carro parado não atravessa" foi removido acidentalmente por um replace em cadeia ANTES do primeiro commit — a suite parecia cobrir jogador×carro e não cobria (mutante M7 sobreviveu por falta de alvo) | Teste restaurado + o script de mutação agora acusa "pattern sem teste" como erro |
+| Oráculo cego a travessia | O mesmo teste olhava só a posição FINAL: com a colisão desligada o jogador atravessava o carro e parava do outro lado a 3m — passava. E o caminho original roçava na fogueira do acampamento, que barrava o jogador antes do carro | Distância MÍNIMA amostrada por tick + aproximação por rota limpa |
+
+**Passes vazios eliminados**: 19 saídas silenciosas (`if (!x) return` quando o
+seletor não acha o cenário na seed) viraram `t.skip()` VISÍVEL — e a suite
+completa roda com **0 skipped** na seed fixa (toda pré-condição existe).
+Oráculos apertados: parede/árvore/empurrão agora exigem que o jogador tenha
+realmente CHEGADO no alvo (sem "passou porque nem testou").
+
+**Invariante das entidades (`test/entities.test.js`)**: nenhum boneco voando
+ou enterrado — inimigos, animais, pickups, veículos e bosses comparados com o
+chão real (groundAt), no spawn e após 5s de IA andando; reporta TODOS os
+violadores. O detector foi validado plantando um inimigo a 12m do chão
+(acusou na hora). Resultado no jogo: **zero violadores** nos dois cenários.

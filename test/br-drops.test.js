@@ -18,7 +18,7 @@ describe('BR — drops de morte', { skip: !CHROME && 'Chrome não encontrado' },
     if (h) await h.close();
   });
 
-  it('dado um deathDrop em cima de uma torre, então o loot aparece NO andar — não 27m abaixo', async () => {
+  it('dado um deathDrop em cima de uma torre, então o loot aparece NO andar — não 27m abaixo', async t => {
     // torre mais alta (mesma seed fixa de sempre)
     const alvo = await h.play(() => {
       const QA = window.QA, MP = QA.MP;
@@ -28,7 +28,7 @@ describe('BR — drops de morte', { skip: !CHROME && 'Chrome não encontrado' },
         .sort((a, b) => b.dif - a.dif)[0];
       return camp && camp.dif > 8 ? camp : null;
     });
-    if (!alvo) return; // seed sem torre alta: sem veredito
+    if (!alvo) { t.skip('pré-condição não encontrada nesta seed'); return; }
     bot.emit('deathDrop', { pos: [alvo.x, alvo.floorY, alvo.z], items: [{ type: 'med' }] });
     const r = await h.play(async (alvoIn) => {
       const dbg = window.__BR_debug;

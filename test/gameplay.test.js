@@ -16,7 +16,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
   after(async () => { if (h) await h.close(); });
   const play = (fn, ...args) => h.play(fn, ...args);
 
-  it('dado W segurado, então o jogador anda; e com SHIFT corre mais rápido', async () => {
+  it('dado W segurado, então o jogador anda; e com SHIFT corre mais rápido', async t => {
     const r = await play(() => {
       const QA = window.QA;
       QA.reset();
@@ -40,7 +40,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.correu > r.andou * 1.3, `correr (${r.correu}m) não supera andar (${r.andou}m)`);
   });
 
-  it('dado ESPAÇO, então pula uma vez — e no ar não pula de novo', async () => {
+  it('dado ESPAÇO, então pula uma vez — e no ar não pula de novo', async t => {
     const r = await play(() => {
       const QA = window.QA, P = QA.MP.player;
       QA.reset();
@@ -61,7 +61,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.pousou, 'nunca pousou de volta');
   });
 
-  it('dado o jogador solto no ar, então a gravidade o traz de volta ao chão', async () => {
+  it('dado o jogador solto no ar, então a gravidade o traz de volta ao chão', async t => {
     const r = await play(() => {
       const QA = window.QA, P = QA.MP.player;
       QA.reset();
@@ -75,7 +75,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.delta < 0.5, `parou a ${r.delta}m do chão`);
   });
 
-  it('dada uma parede de construção, então o jogador não atravessa', async () => {
+  it('dada uma parede de construção, então o jogador não atravessa', async t => {
     const r = await play(() => {
       const QA = window.QA, P = QA.MP.player, S = QA.G.Structures;
       // parede alta o bastante pra barrar um humano
@@ -94,11 +94,11 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
       QA.tick(120); // 2s empurrando
       return { x: P.pos.x, limite: b.x0, raio: P.radius };
     });
-    if (!r) return; // mapa dessa seed sem parede adequada: nada a testar
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
     assert.ok(r.x <= r.limite - r.raio + 0.15, `atravessou: x=${r.x.toFixed(2)} limite=${r.limite.toFixed(2)}`);
   });
 
-  it('dado um carro parado, então o jogador não passa por dentro dele', async () => {
+  it('dado um carro parado, então o jogador não passa por dentro dele', async t => {
     const r = await play(() => {
       const QA = window.QA, P = QA.MP.player, car = QA.G.Car.group.position;
       QA.reset(car.x - 6, car.z);
@@ -111,7 +111,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.d > 1.2, `entrou no chassi: distância ${r.d.toFixed(2)}m`);
   });
 
-  it('dado um tiro no inimigo à frente, então ele perde vida e a munição desce', async () => {
+  it('dado um tiro no inimigo à frente, então ele perde vida e a munição desce', async t => {
     const r = await play(() => {
       const QA = window.QA, G = QA.G, P = QA.MP.player;
       QA.reset(60, 60);
@@ -130,12 +130,12 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
       G.mouse.shooting = false; G.mouse.aiming = false;
       return { hp0, hp1: e.health, mag0, mag1: gun.mag, morreu: !e.alive };
     });
-    if (!r) return;
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
     assert.ok(r.mag1 < r.mag0, 'não gastou munição');
     assert.ok(r.hp1 < r.hp0 || r.morreu, `inimigo intacto (hp ${r.hp0} -> ${r.hp1})`);
   });
 
-  it('dado o pente vazio e R, então recarrega no tempo da arma', async () => {
+  it('dado o pente vazio e R, então recarrega no tempo da arma', async t => {
     const r = await play(() => {
       const QA = window.QA, G = QA.G;
       QA.reset();
@@ -153,7 +153,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.reserve < 90, 'reserva não desceu');
   });
 
-  it('dado dano com colete, então a armadura absorve 70% até quebrar', async () => {
+  it('dado dano com colete, então a armadura absorve 70% até quebrar', async t => {
     const r = await play(() => {
       const QA = window.QA, P = QA.MP.player;
       QA.reset();
@@ -165,7 +165,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.equal(r.health, 91, `vida errada: ${r.health}`);         // 100 - 9
   });
 
-  it('dado dano letal, então o jogador morre de verdade', async () => {
+  it('dado dano letal, então o jogador morre de verdade', async t => {
     const r = await play(() => {
       const QA = window.QA, P = QA.MP.player;
       QA.reset();
@@ -179,7 +179,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.vivo, 'reset não reviveu');
   });
 
-  it('dado um kit médico (Q), então a vida sobe gradualmente', async () => {
+  it('dado um kit médico (Q), então a vida sobe gradualmente', async t => {
     const r = await play(() => {
       const QA = window.QA, G = QA.G, P = QA.MP.player;
       QA.reset();
@@ -196,7 +196,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.health > 55, `curou pouco: ${r.health}`);
   });
 
-  it('dados 5s sem tomar dano, então a vida regenera sozinha', async () => {
+  it('dados 5s sem tomar dano, então a vida regenera sozinha', async t => {
     const r = await play(() => {
       const QA = window.QA, P = QA.MP.player;
       QA.reset();
@@ -208,7 +208,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.health > 55, `não regenerou: ${r.health}`);
   });
 
-  it('dado o carro, então entra, acelera de verdade e sai ao lado', async () => {
+  it('dado o carro, então entra, acelera de verdade e sai ao lado', async t => {
     const r = await play(() => {
       const QA = window.QA, G = QA.G;
       QA.reset();
@@ -234,7 +234,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.dPlayer < 8, 'saiu longe demais do carro');
   });
 
-  it('dado o helicóptero, então decola com ESPAÇO', async () => {
+  it('dado o helicóptero, então decola com ESPAÇO', async t => {
     const r = await play(() => {
       const QA = window.QA, G = QA.G, P = QA.MP.player;
       QA.reset();
@@ -255,7 +255,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.subiu > 2, `não decolou: subiu ${r.subiu.toFixed(1)}m`);
   });
 
-  it('dado sprint + CTRL, então desliza (slide)', async () => {
+  it('dado sprint + CTRL, então desliza (slide)', async t => {
     const r = await play(() => {
       const QA = window.QA, G = QA.G, P = QA.MP.player;
       QA.reset();
@@ -269,7 +269,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.slideT > 0, `não deslizou (slideT=${r.slideT})`);
   });
 
-  it('dado um disparo em rajada, então o recoil levanta a mira e depois assenta', async () => {
+  it('dado um disparo em rajada, então o recoil levanta a mira e depois assenta', async t => {
     const r = await play(() => {
       const QA = window.QA, G = QA.G, MP = QA.MP;
       QA.reset();
@@ -289,7 +289,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.volta < r.pico, 'mira não assentou depois da rajada');
   });
 
-  it('dada a IA ligada e um inimigo à vista, então ele sai da patrulha e engaja', async () => {
+  it('dada a IA ligada e um inimigo à vista, então ele sai da patrulha e engaja', async t => {
     const r = await play(() => {
       const QA = window.QA, G = QA.G, P = QA.MP.player;
       QA.reset(40, 40);
@@ -306,12 +306,12 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
       e.group.position.set(-400, QA.MP.heightAt(-400, -400), -400); // some daqui
       return { fsm, tomouDano: P.health < hp0 };
     });
-    if (!r) return;
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
     assert.ok(r.fsm !== 'PATRULHA' || r.tomouDano,
       `inimigo ignorou o jogador a 12m (fsm=${r.fsm})`);
   });
 
-  it('dada uma granada no pé do inimigo, então ele perde vida', async () => {
+  it('dada uma granada no pé do inimigo, então ele perde vida', async t => {
     const r = await play(() => {
       const QA = window.QA, G = QA.G;
       QA.reset(50, 50);
@@ -322,11 +322,11 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
       G.Grenades.explode(e.group.position.clone());
       return { hp: e.health, morreu: !e.alive };
     });
-    if (!r) return;
+    if (!r) { t.skip('pré-condição não encontrada nesta seed'); return; }
     assert.ok(r.hp < 100 || r.morreu, 'explosão não feriu o inimigo');
   });
 
-  it('dado dano no COLOSSO, então o hp do boss desce', async () => {
+  it('dado dano no COLOSSO, então o hp do boss desce', async t => {
     const r = await play(() => {
       const QA = window.QA, G = QA.G, THREE = QA.MP.THREE;
       const hp0 = G.Boss.state.hp;
@@ -336,7 +336,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.hp1 < r.hp0, `boss não levou dano (${r.hp0} -> ${r.hp1})`);
   });
 
-  it('dado o tempo passando, então o dia avança (Env.tod)', async () => {
+  it('dado o tempo passando, então o dia avança (Env.tod)', async t => {
     const r = await play(() => {
       const QA = window.QA;
       const t0 = QA.G.Env.tod;
@@ -346,7 +346,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.t1 > r.t0, 'relógio do mundo parado');
   });
 
-  it('rede de segurança: nenhum erro de runtime acumulado durante toda a suite', async () => {
+  it('rede de segurança: nenhum erro de runtime acumulado durante toda a suite', async t => {
     const errs = await play(() => window.__game.errors.map(e => String(e && e.message || e)));
     assert.deepEqual(errs, [], `erros: ${errs.join(' | ')}`);
   });
