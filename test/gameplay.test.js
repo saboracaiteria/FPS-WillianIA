@@ -398,7 +398,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
 
   it('dado TAB, então o painel de inventário abre — e fecha no segundo toque', async t => {
     const r = await play(() => {
-      const QA = window.QA, G = QA.G;
+      const QA = window.QA;
       QA.reset();
       QA.MP.justPressed.add('Tab'); QA.tick(1); // TAB é toggle por pressão
       const aberto = document.getElementById('invPanel').classList.contains('open');
@@ -412,7 +412,7 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
 
   it('dado ENTER, então o chat da sala abre — e ESC fecha sem vazar teclas pro jogo', async t => {
     const r = await play(() => {
-      const QA = window.QA, G = QA.G;
+      const QA = window.QA;
       QA.reset();
       window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Enter', bubbles: true }));
       const input = document.getElementById('brChatInput');

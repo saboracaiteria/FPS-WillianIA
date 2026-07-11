@@ -39,11 +39,29 @@ module.exports = [
     },
   },
   {
-    files: ['multiplayer-client.js', 'br-game.js'],
+    files: ['multiplayer-client.js', 'br-game.js', 'city-destruction-client.js'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'script',
       globals: globals.browser,
+    },
+  },
+  {
+    // UMD: roda no navegador (window) e no node (module.exports)
+    files: ['city-destruction-protocol.js'],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'script',
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
+  {
+    files: ['scripts/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'commonjs',
+      // stress.js injeta trechos no navegador (page.evaluate), como test/
+      globals: { ...globals.node, ...globals.browser },
     },
   },
 ];

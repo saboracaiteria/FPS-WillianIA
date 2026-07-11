@@ -388,6 +388,12 @@ export function createStructures(deps) {
   cityRuins.visible = false;
   const ruinWalls = [];   // colisores simplificados dos escombros (poucos)
   {
+    // PRNG PRÓPRIO: as ruínas nascem no boot e NÃO podem consumir o RNG
+    // seedado do mundo — senão tudo gerado depois delas muda de lugar
+    // (mundos de versões antigas/novas divergiriam e o QA quebra)
+    let _rs = 0xC1DADE;
+    const _rr = () => (_rs = (_rs * 1664525 + 1013904223) >>> 0) / 4294967296;
+    const rand = (a = 1, b) => (b === undefined ? _rr() * a : a + _rr() * (b - a));
     const cx = CITY.x, cz = CITY.z, gy = heightAt(cx, cz);
     const mRuina = csmMat(new THREE.MeshStandardMaterial({ color: 0x2e2c2a, roughness: 0.95 }));
     const mQueim = csmMat(new THREE.MeshStandardMaterial({ color: 0x191715, roughness: 1 }));

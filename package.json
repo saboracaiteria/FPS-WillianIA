@@ -8,7 +8,7 @@
     "test": "node --test test/",
     "stress": "node scripts/stress.js",
     "test:e2e": "python3 tests/city-destruction-e2e.py",
-    "lint": "eslint server.js game.js js/ multiplayer-client.js br-game.js test/ eslint.config.js"
+    "lint": "eslint server.js game.js js/ multiplayer-client.js br-game.js city-destruction-protocol.js city-destruction-client.js scripts/ test/ eslint.config.js"
   },
   "engines": {
     "node": ">=18"

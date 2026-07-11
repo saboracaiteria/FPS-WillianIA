@@ -234,3 +234,64 @@ describe('Morte por míssil — vítima dentro do raio + late join', { skip: !CH
     assert.ok(!r.cinematic, 'late join reiniciou a cinemática');
   });
 });
+
+/* =============== MODO SOLO: sem servidor, evento local =============== */
+describe('Modo solo — evento local de destruição sem servidor', { skip: !CHROME && 'Chrome não encontrado' }, () => {
+  let srv, browser, page;
+  before(async () => {
+    // servidor ESTÁTICO puro (sem socket.io): o jogo cai no modo solo real
+    const http = require('node:http');
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const root = path.join(__dirname, '..');
+    const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
+    srv = http.createServer((req, res) => {
+      const f = path.join(root, req.url === '/' ? 'index.html' : req.url.split('?')[0]);
+      fs.readFile(f, (e, d) => {
+        if (e) { res.writeHead(404); res.end(); return; }
+        res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' });
+        res.end(d);
+      });
+    }).listen(3176);
+    const puppeteer = require('puppeteer-core');
+    browser = await puppeteer.launch({
+      executablePath: CHROME, headless: 'new',
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--enable-unsafe-swiftshader',
+        '--use-gl=angle', '--use-angle=swiftshader', '--mute-audio', '--window-size=800,600'],
+    });
+    page = await browser.newPage();
+    await page.goto('http://localhost:3176/', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction('!!window.__game && !!window.__MP && !!window.__CityDestruction',
+      { timeout: 60000 });
+  });
+  after(async () => { if (browser) await browser.close(); if (srv) srv.close(); });
+
+  it('dado o jogo solo, então o evento local roda a cinemática e destrói a cidade', async () => {
+    const r = await page.evaluate(async () => {
+      const G = window.__game, MP = window.__MP;
+      if (MP.socket) return { temSocket: true }; // não é solo de verdade
+      G.forceStart();
+      // mesmo caminho do poll solo, com timestamps curtos pro teste
+      const t0 = Date.now();
+      window.__CityDestruction.sync({
+        eventId: 'solo-teste', seed: 424242, state: 'intact',
+        cinematicStartedAt: t0 + 700, impactAt: t0 + 2400,
+      });
+      const espera = async (cond, ms) => {
+        const i0 = performance.now();
+        while (!cond() && performance.now() - i0 < ms)
+          await new Promise(r2 => setTimeout(r2, 100));
+        return cond();
+      };
+      const ligou = await espera(() => MP.state.cinematic === true, 8000);
+      const destruiu = await espera(() => G.Structures.city.getState() === 'destroyed', 8000);
+      const desligou = await espera(() => MP.state.cinematic === false, 16000);
+      return { temSocket: false, ligou, destruiu, desligou, vivo: !MP.player.dead };
+    });
+    assert.ok(!r.temSocket, 'página estática ainda conectou socket (não é solo)');
+    assert.ok(r.ligou, 'cinemática solo nunca ligou');
+    assert.ok(r.destruiu, 'cidade não foi destruída no solo');
+    assert.ok(r.desligou, 'cinemática solo não terminou');
+    assert.ok(r.vivo, 'evento solo matou o jogador local (dano é só do servidor)');
+  });
+});

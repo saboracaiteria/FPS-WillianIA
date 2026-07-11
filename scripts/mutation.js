@@ -23,7 +23,7 @@ const MUTS = [
     find: 'pos.y >= b.y1 - 0.12', repl: 'pos.y > b.y1',
     test: 'test/collision.test.js', pattern: 'POUSAR nele' },
   { id: 'M3 telhado deixa de ser plataforma', file: 'js/structures.js',
-    find: "      platforms.push({ x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2, y: y + h / 2 });",
+    find: "      platforms.push({ x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2, y: y + h / 2, city: true });",
     repl: '',
     test: 'test/collision.test.js', pattern: 'POUSAR nele' },
   { id: 'M4 heli sem colisão de prédio', file: 'js/heli.js',
@@ -53,6 +53,14 @@ const MUTS = [
     find: 'const y = MP.groundAt(pos[0], pos[2], (pos[1] || 0) + 1);',
     repl: 'const y = MP.heightAt(pos[0], pos[2]);',
     test: 'test/br-drops.test.js', pattern: 'deathDrop em cima de uma torre' },
+  { id: 'M11 raio letal dos mísseis ignorado (ninguém morre)', file: 'server.js',
+    find: 'if (Math.hypot(p.pos[0] - C.x, p.pos[2] - C.z) > R) continue;',
+    repl: 'continue;',
+    test: 'test/city-destruction-server.test.js', pattern: 'DENTRO do raio morre' },
+  { id: 'M12 destroy sem tirar a colisão das paredes da cidade', file: 'js/structures.js',
+    find: 'for (let i = walls.length - 1; i >= 0; i--) if (walls[i].city) walls.splice(i, 1);',
+    repl: ';',
+    test: 'test/city-destruction-client.test.js', pattern: 'parede original some' },
 ];
 
 (async () => {
@@ -61,10 +69,11 @@ const MUTS = [
     const orig = rd(m.file);
     if (!orig.includes(m.find)) {
       results.push({ id: m.id, status: 'ERRO: alvo da mutação não encontrado' });
+      console.log(`${'ERRO: alvo não encontrado!'.padEnd(40)} ${m.id}`);
       continue;
     }
     wr(m.file, orig.replace(m.find, m.repl));
-    let killed = false;
+    let killed;
     try {
       const r = spawnSync(process.execPath,
         ['--test', `--test-name-pattern=${m.pattern}`, m.test],

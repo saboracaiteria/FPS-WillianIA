@@ -264,7 +264,7 @@ describe('Colisões', { skip: !CHROME && 'Chrome não encontrado' }, () => {
 
   it('dada uma parede entre atirador e alvo, então a bala NÃO atravessa', async t => {
     const r = await play((fw) => {
-      const QA = window.QA, G = QA.G, P = QA.MP.player;
+      const QA = window.QA, G = QA.G;
       const b = eval(fw);
       if (!b) return null;
       const cz = (b.z0 + b.z1) / 2;

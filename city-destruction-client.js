@@ -323,6 +323,7 @@
       const soloPoll = setInterval(() => {
         if (!MP.state.started) return;
         clearInterval(soloPoll);
+        if (cd) return; // já existe evento sincronizado — não atropela
         const t0 = Date.now();
         window.__CityDestruction.sync({
           eventId: 'solo-' + t0,
