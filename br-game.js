@@ -15,6 +15,14 @@
     const A = G.arsenal;
     const KNIFE = 5; // índice da faca no arsenal
 
+    /* encaminha estado do evento da cidade (o script pode bootar depois) */
+    function sendCity(c) {
+      if (window.__CityDestruction) window.__CityDestruction.sync(c);
+      else setTimeout(() => sendCity(c), 200);
+    }
+    if (INIT.cityDestruction && INIT.cityDestruction.eventId) sendCity(INIT.cityDestruction);
+    socket.on('cityDestruction', c => sendCity(c));
+
     /* =============== avatares voxel dos outros jogadores =============== */
     const remotes = new Map();
     window.__MP_remotePlayers = []; // varrido pelo fire() do jogo (inclui o boss)
@@ -883,6 +891,7 @@
       S.myKills = 0; S.myPlacement = 0; recapShown = false; myDeathInfo = null;
       bossDeadFlag = !S.flags.golem; // GOLEM desligado pela regra da sala: nem constrói
       window.__BR_zumbis = !!S.flags.zumbis;
+      sendCity(d.plan.city ? { ...d.plan.city, state: 'intact' } : null);
       bossHp = bossMaxHp = d.plan.boss.hp;
       beginMatch(false);
     });
@@ -920,14 +929,20 @@
       MP.playerDamage(d.dmg, { x: f[0], y: f[1], z: f[2] });
     });
     socket.on('playerKilled', d => {
-      const feed = d.byZone
-        ? `☣ <b>${esc(d.victimNick)}</b> morreu pro gás`
-        : `<b>${esc(d.killerNick || '???')}</b> ▸ ${esc(d.victimNick)} <i style="opacity:.6">${esc(d.weapon)}</i>`;
+      const feed = d.byCity
+        ? `☄ <b>${esc(d.victimNick)}</b> morreu no ataque de mísseis à cidade`
+        : d.byZone
+          ? `☣ <b>${esc(d.victimNick)}</b> morreu pro gás`
+          : `<b>${esc(d.killerNick || '???')}</b> ▸ ${esc(d.victimNick)} <i style="opacity:.6">${esc(d.weapon)}</i>`;
       MP.addKillFeed(feed);
       if (d.victimId === INIT.id) {
         myDeathInfo = d;
         S.myPlacement = d.placement || S.myPlacement;
-        // servidor me eliminou (zona/AFK) mas meu cliente ainda me acha vivo:
+        if (d.byCity) { // morto pelo ataque de mísseis: mensagem oficial da vítima
+          const ds = document.getElementById('deathSub');
+          if (ds) ds.textContent = 'Você morreu atingido pelo ataque de mísseis próximo à cidade!';
+        }
+        // servidor me eliminou (zona/AFK/mísseis) mas meu cliente ainda me acha vivo:
         // força a morte local, senão viro fantasma jogando numa partida onde já morri
         if (!MP.player.dead && (S.phase === 'PLAY' || S.phase === 'FALL' || S.phase === 'SHIP')) forceDeath = true;
       }
@@ -1228,7 +1243,7 @@
           dmgAcc = 0;
           const P = MP.player.pos;
           const dz = Math.hypot(P.x - zc.x, P.z - zc.z);
-          const fora = S.phase === 'PLAY' && !MP.player.dead && dz > zc.r;
+          const fora = S.phase === 'PLAY' && !MP.player.dead && dz > zc.r && !MP.state.cinematic;
           UI.gasTint.style.opacity = fora ? '1' : '0'; // tela avermelha FORA da safe
           if (fora)
             MP.playerDamage(zc.dps * 0.5, null); // se alguém me feriu há pouco, a kill ainda é dele

@@ -88,6 +88,29 @@ export function createSFX(deps) {
     deathSting(){ [220, 174, 146, 110].forEach((f, i) => setTimeout(() => blip(f, 0.55, 'triangle', 0.15), i * 230)); },
     eat()       { noise(0.12, 0.16, 1200, 280, 1); blip(300, 0.09, 'sine', 0.1); },
     unlock()    { [523, 659, 784].forEach((f, i) => setTimeout(() => blip(f, 0.16, 'triangle', 0.14), i * 105)); },
+    /* ---- evento de destruição da cidade ---- */
+    missileIncoming() { // sirene grave + rasgo de ar
+      blip(220, 1.6, 'sawtooth', 0.1, -60);
+      noise(1.8, 0.16, 2400, 300, 0.4);
+      setTimeout(() => blip(180, 1.4, 'sawtooth', 0.09, -50), 700);
+    },
+    warheadRelease() { // estalos metálicos + assobios agudos caindo
+      for (let i = 0; i < 5; i++) setTimeout(() => {
+        blip(1400 - i * 120, 0.5, 'triangle', 0.07, -900);
+        noise(0.2, 0.08, 3600, 800, 1.2);
+      }, i * 130);
+    },
+    cityImpact() { // detonação em camadas: sub + corpo + estilhaço
+      blip(38, 1.6, 'sine', 0.5, -20);
+      noise(1.6, 0.9, 380, 30, 0.35);
+      blip(90, 0.9, 'sawtooth', 0.25, -55);
+      setTimeout(() => noise(1.1, 0.5, 700, 60, 0.5), 180);
+      setTimeout(() => noise(2.4, 0.3, 240, 25, 0.3), 500);
+    },
+    distantRumble() { // ribombo distante contínuo (pós-impacto)
+      noise(2.8, 0.2, 160, 22, 0.25);
+      blip(46, 2.2, 'sine', 0.12, -12);
+    },
     setVolumes() { if (master) master.gain.setTargetAtTime(SETTINGS.vol, ctx.currentTime, 0.1); },
     engineStart() {
       if (!ctx || engineOsc) return;

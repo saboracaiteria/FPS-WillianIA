@@ -131,3 +131,106 @@ describe('Structures.city — troca do mundo', { skip: !CHROME && 'Chrome não e
     assert.ok(r.pecas >= 10, `versão destruída rala demais (${r.pecas} peças)`);
   });
 });
+
+/* =============== PARTE B: cinemática + morte (partida BR real) =============== */
+describe('Cinemática — jogador fora do raio sobrevive e recupera o controle', { skip: !CHROME && 'Chrome não encontrado' }, () => {
+  let h, bot;
+  before(async () => {
+    h = await bootGame({ port: 3178, extraEnv: { COUNTDOWN_S: '1', NEXT_IN_S: '300',
+      CITY_DESTRUCTION_DELAY_MS: '6000', CITY_DESTRUCTION_IMPACT_DELAY_MS: '2000' } });
+    bot = await startBRMatch(h);
+  });
+  after(async () => { if (bot) bot.close(); if (h) await h.close(); });
+
+  it('dada a timeline, então trava o jogador, destrói a cidade no impacto e devolve a câmera', async t => {
+    const r = await h.play(async () => {
+      const QA = window.QA, MP = QA.MP, G = QA.G, P = MP.player;
+      const city = window.__BR_debug.S.plan && window.__BR_debug.S.plan.city;
+      if (!city) return { semPlano: true };
+      QA.reset(200, 200); // bem fora do raio letal
+      const posAntes = [P.pos.x, P.pos.z];
+      // espera a cinemática ligar (relógio do servidor)
+      let t0 = performance.now();
+      while (!MP.state.cinematic && performance.now() - t0 < 12000)
+        await new Promise(r2 => setTimeout(r2, 150));
+      const ligou = MP.state.cinematic === true;
+      // input travado: segura W por 0,8s de tempo real
+      G.keys.KeyW = true;
+      await new Promise(r2 => setTimeout(r2, 800));
+      G.keys.KeyW = false;
+      const andou = Math.hypot(P.pos.x - posAntes[0], P.pos.z - posAntes[1]);
+      // espera o fim da cinemática (impacto + aftermath)
+      t0 = performance.now();
+      while (MP.state.cinematic && performance.now() - t0 < 16000)
+        await new Promise(r2 => setTimeout(r2, 200));
+      const desligou = MP.state.cinematic === false;
+      const estadoCidade = G.Structures.city.getState();
+      // câmera devolvida ao FPS: perto da cabeça do jogador
+      await new Promise(r2 => setTimeout(r2, 400));
+      const dCam = MP.camera.position.distanceTo(
+        new MP.THREE.Vector3(P.pos.x, P.pos.y + 1.62, P.pos.z));
+      return { ligou, andou, desligou, estadoCidade, dCam: +dCam.toFixed(2), vivo: !P.dead };
+    });
+    assert.ok(r && !r.semPlano, 'partida sem plan.city');
+    assert.ok(r.ligou, 'state.cinematic nunca ligou');
+    assert.ok(r.andou < 0.5, `input vazou durante a cinemática (andou ${r.andou}m)`);
+    assert.ok(r.desligou, 'cinemática nunca terminou');
+    assert.equal(r.estadoCidade, 'destroyed', 'cidade não foi destruída no impacto');
+    assert.ok(r.dCam < 3, `câmera não voltou pro jogador (d=${r.dCam})`);
+    assert.ok(r.vivo, 'jogador FORA do raio morreu');
+    assert.equal(h.pageErrors.length, 0, 'pageerrors: ' + h.pageErrors.join(' | '));
+  });
+});
+
+describe('Morte por míssil — vítima dentro do raio + late join', { skip: !CHROME && 'Chrome não encontrado' }, () => {
+  let h, bot;
+  before(async () => {
+    h = await bootGame({ port: 3177, extraEnv: { COUNTDOWN_S: '1', NEXT_IN_S: '300',
+      CITY_DESTRUCTION_DELAY_MS: '5000', CITY_DESTRUCTION_IMPACT_DELAY_MS: '1500' } });
+    bot = await startBRMatch(h);
+  });
+  after(async () => { if (bot) bot.close(); if (h) await h.close(); });
+
+  it('dado o jogador NA cidade, então morre com a mensagem oficial e sem kill creditada', async t => {
+    const r = await h.play(async () => {
+      const QA = window.QA, MP = QA.MP, P = MP.player;
+      QA.reset(-340, 130); // centro da cidade
+      P.armor = 50; P.invulnUntil = MP.state.gameTime + 999; // teste: defesas não salvam
+      const iv = setInterval(() => { if (!P.dead) { P.pos.set(-340, P.pos.y, 130); } }, 300);
+      const t0 = performance.now();
+      while (!P.dead && performance.now() - t0 < 15000)
+        await new Promise(r2 => setTimeout(r2, 200));
+      clearInterval(iv);
+      return {
+        morreu: P.dead === true,
+        mensagem: document.getElementById('deathSub').textContent,
+        feed: document.getElementById('killfeed').innerHTML,
+      };
+    });
+    assert.ok(r.morreu, 'vítima no centro da cidade sobreviveu ao míssil');
+    assert.equal(r.mensagem, 'Você morreu atingido pelo ataque de mísseis próximo à cidade!');
+    assert.ok(/ataque de mísseis à cidade/.test(r.feed), 'kill feed sem a mensagem do míssil');
+  });
+
+  it('dado um late join após o impacto, então a cidade JÁ nasce destruída e sem cinemática', async t => {
+    // "depois" de verdade: espera a janela da cinemática fechar (impactAt + 3,5s)
+    const impactAt = await h.play(() => window.__BR_debug.S.plan.city.impactAt);
+    const falta = impactAt + 4000 - Date.now();
+    if (falta > 0) await new Promise(r => setTimeout(r, falta));
+    const page2 = await h.browser.newPage();
+    t.after(() => page2.close());
+    await page2.goto(`http://localhost:3177/`, { waitUntil: 'domcontentloaded' });
+    await page2.waitForFunction('!!window.__game && !!window.__MP', { timeout: 60000 });
+    const r = await page2.evaluate(async () => {
+      const t0 = performance.now();
+      while (window.__game.Structures.city.getState() !== 'destroyed' && performance.now() - t0 < 9000)
+        await new Promise(r2 => setTimeout(r2, 150));
+      return {
+        estado: window.__game.Structures.city.getState(),
+        cinematic: window.__MP.state.cinematic === true,
+      };
+    });
+    assert.equal(r.estado, 'destroyed', 'late join não recebeu cidade destruída');
+    assert.ok(!r.cinematic, 'late join reiniciou a cinemática');
+  });
+});

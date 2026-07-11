@@ -577,6 +577,7 @@ const controls = new PointerLockControls(camera, document.body);
 const state = {
   started: false, paused: true, pointerLocked: false, lockFailed: false,
   driving: false, flying: false, gameTime: 0,
+  cinematic: false, // destruição da cidade: timeline assume a câmera/input
 };
 
 const keys = {};
@@ -1250,7 +1251,7 @@ function shootUpdate(dt, t) {
     centerMsg('Mira: ' + s.name, 1100);
     SFX.switchW();
   }
-  if (state.driving || state.flying || state.paused || player.dead || window.__BR_freeze) { mouse.clicked = false; return; }
+  if (state.driving || state.flying || state.paused || player.dead || window.__BR_freeze || state.cinematic) { mouse.clicked = false; return; }
   if (justPressed.has('KeyG')) Grenades.throwNade(t);
   const interval = 60 / gun.rpm;
   const want = gun.auto ? mouse.shooting : mouse.clicked;
@@ -1641,7 +1642,7 @@ function tick(forceDt) {
 
   /* simulação */
   Env.update(dt, t);
-  if (!state.driving && !state.flying && !window.__BR_freeze) playerUpdate(dt, t);
+  if (!state.driving && !state.flying && !window.__BR_freeze && !state.cinematic) playerUpdate(dt, t);
   shootUpdate(dt, t);
   world.step(1 / 60, dt, 3);
   Car.update(dt, t);
@@ -1661,9 +1662,12 @@ function tick(forceDt) {
   /* áudio de clima (chuva) */
   SFX.musicUpdate();
 
-  /* câmera + arma + HUD dinâmico */
-  applyFpsCamera(dt, t);
-  carCameraUpdate(dt);
+  /* câmera + arma + HUD dinâmico (a cinemática assume a câmera sozinha) */
+  if (!state.cinematic) {
+    applyFpsCamera(dt, t);
+    carCameraUpdate(dt);
+  }
+  if (window.__CityDestruction) window.__CityDestruction.tick(dt);
 
   /* grama reativa: player E carro dobram as lâminas */
   carPosV.copy(Car.group.position);

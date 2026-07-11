@@ -62,7 +62,7 @@
       nick, myColors,
       chatOpen: false,
     };
-    S.now = () => Date.now() + S.clockOffset;
+    S.now = () => Date.now() + S.clockOffset + (S.halfRtt || 0); // offset + compensação de latência
     S.matchT = () => (S.now() - S.t0) / 1000;
 
     /* ---------- CSS ---------- */
@@ -264,6 +264,7 @@
               <label><input type="checkbox" id="fgGolem"> GOLEM da fortaleza</label>
               <label><input type="checkbox" id="fgAnimais"> Animais no mapa</label>
               <label><input type="checkbox" id="fgZumbis"> Zumbis à noite ☠</label>
+              <label><input type="checkbox" id="fgCidade"> Destruição automática da cidade ☄</label>
               <label>Bots na sala:
                 <select id="fgBots" class="brInput">
                   <option value="0">nenhum</option>
@@ -343,12 +344,14 @@
       if (btn) btn.addEventListener('click', () => socket.emit('requestStart'));
       const fg = { golem: document.getElementById('fgGolem'),
         animais: document.getElementById('fgAnimais'), zumbis: document.getElementById('fgZumbis'),
+        cidade: document.getElementById('fgCidade'),
         bots: document.getElementById('fgBots'), ciclo: document.getElementById('fgCiclo') };
       const syncFlagsUI = () => {
         const isHost = INIT.id === S.hostId;
         if (fg.golem) { fg.golem.checked = S.flags.golem; fg.golem.disabled = !isHost; }
         if (fg.animais) { fg.animais.checked = S.flags.animais; fg.animais.disabled = !isHost; }
         if (fg.zumbis) { fg.zumbis.checked = !!S.flags.zumbis; fg.zumbis.disabled = !isHost; }
+        if (fg.cidade) { fg.cidade.checked = S.flags.cidade !== false; fg.cidade.disabled = !isHost; }
         if (fg.bots) { fg.bots.value = String(S.flags.bots || 0); fg.bots.disabled = !isHost; }
         if (fg.ciclo) { fg.ciclo.value = S.flags.ciclo; fg.ciclo.disabled = !isHost; }
       };
@@ -356,8 +359,8 @@
       syncFlagsUI();
       const sendFlags = () => socket.emit('setFlags',
         { golem: fg.golem.checked, animais: fg.animais.checked, zumbis: fg.zumbis.checked,
-          bots: +fg.bots.value, ciclo: fg.ciclo.value });
-      for (const k of ['golem', 'animais', 'zumbis', 'bots', 'ciclo'])
+          cidade: fg.cidade.checked, bots: +fg.bots.value, ciclo: fg.ciclo.value });
+      for (const k of ['golem', 'animais', 'zumbis', 'cidade', 'bots', 'ciclo'])
         if (fg[k]) fg[k].addEventListener('change', sendFlags);
       const hIn = document.getElementById('brHostCode'), hBtn = document.getElementById('brHostBtn');
       if (hBtn) hBtn.addEventListener('click', () => claimHost(hIn.value));
@@ -426,7 +429,11 @@
     setInterval(() => {
       const t0 = performance.now();
       socket.timeout(4000).emit('pingx', err => {
-        if (!err) window.__MP_ping = Math.round(performance.now() - t0);
+        if (!err) {
+          const rtt = performance.now() - t0;
+          window.__MP_ping = Math.round(rtt);
+          S.halfRtt = rtt / 2; // o serverNow chegou atrasado ~meia viagem
+        }
       });
     }, 2000);
 
