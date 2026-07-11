@@ -22,11 +22,19 @@ module.exports = [
     },
   },
   {
-    files: ['game.js'],
+    files: ['game.js', 'js/**/*.js'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',
       globals: globals.browser,
+    },
+  },
+  {
+    files: ['js/minimap-worker.js'],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'script',
+      globals: globals.worker,
     },
   },
   {

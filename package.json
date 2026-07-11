@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test test/",
-    "lint": "eslint server.js game.js multiplayer-client.js br-game.js test/ eslint.config.js"
+    "lint": "eslint server.js game.js js/ multiplayer-client.js br-game.js test/ eslint.config.js"
   },
   "engines": {
     "node": ">=18"
@@ -19,6 +19,7 @@
     "@eslint/js": "^10.0.1",
     "eslint": "^10.7.0",
     "globals": "^17.7.0",
-    "socket.io-client": "^4.7.5"
+    "socket.io-client": "^4.7.5",
+    "three": "^0.185.1"
   }
 }
