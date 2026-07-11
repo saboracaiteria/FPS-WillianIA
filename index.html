@@ -3378,6 +3378,11 @@ function tryToggleCar() {
     if (Heli.tryEnter()) return;
     const { v, d } = Car.nearest(player.pos);
     if (d < 4.5) {
+      // BR online: carro com outro jogador dentro não aceita segundo motorista
+      if (window.__BR_takenCars && window.__BR_takenCars.has(Car.vehicles.indexOf(v))) {
+        centerMsg('Veículo ocupado!', 1400);
+        return;
+      }
       Car.setCur(v);
       // desvira o veículo se estiver capotado
       const up = v.chassisBody.quaternion.vmult(new CANNON.Vec3(0, 1, 0));
@@ -3945,6 +3950,7 @@ const Grenades = (() => {
         a.damage(Math.round(120 * (1 - d / R) + 20), p, _n, false);
       }
     }
+    if (window.__BR_splash) window.__BR_splash(p, R, 110); // BR: fere jogadores remotos/boss
     const dp = player.pos.distanceTo(p);
     if (dp < 6.5) playerDamage(Math.round(55 * (1 - dp / 6.5)), p);
     addTrauma(clamp(0.9 - dp * 0.04, 0.15, 0.9));
@@ -3996,6 +4002,7 @@ const Grenades = (() => {
    ================================================================ */
 const Rockets = (() => {
   const pool = [];
+  const _prevR = new THREE.Vector3(); // posição anterior do foguete (temp exclusivo)
   const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3a3f3a, roughness: 0.5 });
   for (let i = 0; i < 4; i++) {
     const m = new THREE.Group();
@@ -4019,6 +4026,7 @@ const Rockets = (() => {
     for (const r of pool) {
       if (!r.live) continue;
       r.vel.y -= 2.5 * dt;
+      _prevR.copy(r.m.position); // posição anterior (checa parede no caminho)
       r.m.position.addScaledVector(r.vel, dt);
       r.m.lookAt(_v1.copy(r.m.position).add(r.vel));
       r.smokeAcc += dt;
@@ -4027,8 +4035,12 @@ const Rockets = (() => {
         FX.spawnParticle(r.m.position, _v2.set(rand(-0.5, 0.5), rand(0.2, 0.8), rand(-0.5, 0.5)), 0x9b958c, 0.16, 0.5, -0.3);
       }
       let boom = r.m.position.y < heightAt(r.m.position.x, r.m.position.z) + 0.2;
+      if (!boom && Structures.segBlocked(_prevR, r.m.position)) boom = true; // parede detona (antes atravessava prédio)
       if (!boom) for (const e of Enemies.list) if (e.alive && e.group.position.distanceToSquared(r.m.position) < 2.3) { boom = true; break; }
       if (!boom && Boss.alive && Boss.pos().distanceTo(r.m.position) < 2.6) boom = true;
+      // espoleta de proximidade também pros jogadores remotos (BR)
+      if (!boom && window.__MP_remotePlayers) for (const rp of window.__MP_remotePlayers)
+        if (rp.alive && rp.group.position.distanceToSquared(r.m.position) < 4) { boom = true; break; }
       if (boom || r.m.position.distanceTo(player.pos) > 340) {
         r.live = false; r.m.visible = false;
         Grenades.explode(r.m.position);
@@ -5359,6 +5371,8 @@ const Interact = (() => {
     return null;
   }
   function update(dt, t) {
+    // BR: na nave/queda/espectador (freeze) não existe interação com o mundo
+    if (window.__BR_freeze) { ui.prompt.style.opacity = '0'; return; }
     const c = current();
     if (c) ui.prompt.innerHTML = `<b>E</b> &nbsp;${c.txt}`;
     ui.prompt.style.opacity = c ? '1' : '0';
@@ -5602,7 +5616,7 @@ window.addEventListener('error', e => __errors.push(String(e.message)));
 window.__game = {
   state, player, Car, Heli, Enemies, arsenal, Boss, Alien, Bosses, Grenades, Rockets, Pickups, Structures,
   inventory, keys, mouse, camera, Env, Missions, Interact, Animals, Night, MFlags,
-  switchWeapon, unlockWeapon, startGame,
+  switchWeapon, unlockWeapon, startGame, tryToggleCar,
   get gun() { return gun; },
   get fps() { return fpsVal; },
   get errors() { return __errors; },

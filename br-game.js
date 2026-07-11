@@ -146,6 +146,21 @@
     const bullets = [];
     const _bv = new THREE.Vector3(), _bp = new THREE.Vector3();
     const _yAxis = new THREE.Vector3(0, 1, 0);
+    window.__BR_takenCars = new Set();
+
+    /* dano de área (granada/bazuca) nos jogadores remotos e no boss —
+       sem isto explosivo era inútil no BR (só feria bots do modo solo) */
+    window.__BR_splash = function (p, radius, maxDmg) {
+      for (const rp of window.__MP_remotePlayers) {
+        if (!rp.alive) continue;
+        const d = rp.group.position.distanceTo(p);
+        if (d < radius) {
+          const dmg = Math.round(maxDmg * (1 - d / radius) + 20);
+          MP.DmgNums.spawn(rp.group.position, dmg, false);
+          rp.damage(dmg, rp.group.position);
+        }
+      }
+    };
     window.__BR_ballistics = function (origin, dir, gun) {
       bullets.push({
         p: origin.clone(), v: dir.clone().multiplyScalar(gun.projSpeed),
@@ -662,8 +677,11 @@
 
     /* =============== morte → recap → espectador =============== */
     let myDeathInfo = null; // preenchido pelo playerKilled (victim == eu)
+    let forceDeath = false; // servidor me matou (zona/AFK): aplica na primeira chance
     window.__MP_respawn = function () { // chamado pelo jogo 3.6s após a morte
       MP.setTimeScale(1);
+      // morreu dirigindo/voando: sai do veículo, senão a câmera fica presa no carro no espectador
+      try { if (G.state.driving || G.state.flying) G.tryToggleCar(); } catch (e) {}
       const killer = S.lastHit && Date.now() - S.lastHit.t < 9000 ? S.lastHit : null;
       // solta o loot no chão pros outros: armas + munição + colete + kit
       const items = [];
@@ -787,6 +805,7 @@
     });
     socket.on('playerUpdate', d => {
       if (d.id === INIT.id) return;
+      if (!Array.isArray(d.pos) || !d.pos.every(Number.isFinite)) return; // NaN quebraria o lerp pra sempre
       let rp = remotes.get(d.id);
       if (!rp) rp = makeRemote(d.id, d.nick, d.colors, d.pos);
       rp.nick = d.nick || rp.nick;
@@ -807,7 +826,13 @@
         ? `☣ <b>${esc(d.victimNick)}</b> morreu pro gás`
         : `<b>${esc(d.killerNick || '???')}</b> ▸ ${esc(d.victimNick)} <i style="opacity:.6">${esc(d.weapon)}</i>`;
       MP.addKillFeed(feed);
-      if (d.victimId === INIT.id) { myDeathInfo = d; S.myPlacement = d.placement || S.myPlacement; }
+      if (d.victimId === INIT.id) {
+        myDeathInfo = d;
+        S.myPlacement = d.placement || S.myPlacement;
+        // servidor me eliminou (zona/AFK) mas meu cliente ainda me acha vivo:
+        // força a morte local, senão viro fantasma jogando numa partida onde já morri
+        if (!MP.player.dead && (S.phase === 'PLAY' || S.phase === 'FALL' || S.phase === 'SHIP')) forceDeath = true;
+      }
       if (d.killerId === INIT.id) {
         S.myKills = d.killerKills;
         UI.toast(`☠ você eliminou <b>${esc(d.victimNick)}</b>!`, 'épico');
@@ -959,9 +984,23 @@
       lastT = nowMs;
       if (!window.__BR_active) return;
 
+      /* morte decretada pelo servidor: aplica assim que o jogo deixar */
+      if (forceDeath && !MP.player.dead) {
+        MP.player.invulnUntil = 0;
+        window.__BR_freeze = false;
+        MP.playerDamage(99999, null);
+        if (MP.player.dead) forceDeath = false;
+      }
+
+      /* na nave/queda ninguém pode ser abatido (invulnerabilidade rolante) */
+      if ((S.phase === 'SHIP' || S.phase === 'FALL') && !MP.player.dead && !forceDeath)
+        MP.player.invulnUntil = MP.state.gameTime + 1;
+
       /* avatares: interpolação + animação de corrida + paraquedas + morte */
       const k = 1 - Math.exp(-12 * dt);
+      window.__BR_takenCars.clear(); // carros ocupados por remotos (bloqueia tecla E neles)
       for (const rp of remotes.values()) {
+        if (rp.alive && rp.car >= 0) window.__BR_takenCars.add(rp.car);
         if (rp.deadT > 0 && rp.deadT < 1.2) { // tombando
           rp.deadT += dt;
           rp.group.rotation.x = Math.min(rp.deadT * 2, Math.PI / 2);

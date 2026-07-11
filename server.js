@@ -70,6 +70,17 @@ const players = new Map(); // id -> { nick, colors, kills, alive, spectator, pla
 const HOST_CODE = String(process.env.HOST_CODE || 'WILLIAN77').toUpperCase();
 let hostId = null;
 
+/* knobs de teste (QA) — em produção ficam nos padrões */
+const COUNTDOWN_S = Math.max(1, +process.env.COUNTDOWN_S || 10);
+const NEXT_IN_S = Math.max(1, +process.env.NEXT_IN_S || 14);
+const FLY_TIME = Math.max(1, +process.env.FLY_TIME || 55);
+const BR_FAST = !!process.env.BR_FAST; // acelera o backstop da zona nos testes
+const ZONE_HP = BR_FAST ? 20 : 175;
+const ZONE_GRACE_S = BR_FAST ? 2 : 25;   // pós-voo: janela de queda sem punição
+const FLOAT_AFTER_S = BR_FAST ? 3 : 60;  // "nunca pousou" vale a partir daqui
+const AFK_MS = BR_FAST ? 4000 : 45000;
+const ZONE_DRAIN_X = BR_FAST ? 10 : 1;
+
 const match = {
   phase: 'LOBBY',            // LOBBY | COUNTDOWN | PLAYING | ENDED
   seed: (Math.random() * 0xFFFFFFFF) >>> 0,
@@ -91,7 +102,7 @@ function buildPlan(seed) {
   const ship = {
     from: [Math.cos(a) * 620, Math.sin(a) * 620],
     to: [-Math.cos(a) * 620 + (rng() - 0.5) * 300, -Math.sin(a) * 620 + (rng() - 0.5) * 300],
-    alt: 250, flyTime: 55,
+    alt: 250, flyTime: FLY_TIME,
   };
   // zona: 5 fases encolhendo; cada centro cabe dentro do círculo anterior
   const radii = [560, 340, 200, 110, 55, 24];
@@ -147,8 +158,8 @@ const broadcastRoster = () => io.emit('roster', { phase: match.phase, players: r
 function startCountdown() {
   if (match.phase !== 'LOBBY') return;
   match.phase = 'COUNTDOWN';
-  let n = 10;
-  sysChat('Partida começando em 10s — se prepara!');
+  let n = COUNTDOWN_S;
+  sysChat(`Partida começando em ${n}s — se prepara!`);
   io.emit('countdown', { n });
   match.countdownTimer = setInterval(() => {
     n--;
@@ -159,6 +170,12 @@ function startCountdown() {
 }
 
 function startMatch() {
+  // sala esvaziou durante a contagem: volta pro lobby em vez de rodar partida vazia
+  if (![...players.values()].some(p => !p.spectator)) {
+    match.phase = 'LOBBY';
+    broadcastRoster();
+    return;
+  }
   match.phase = 'PLAYING';
   match.num++;
   match.t0 = Date.now();
@@ -173,7 +190,7 @@ function startMatch() {
   for (const p of players.values()) {
     if (p.spectator) continue; // quem entrou tarde continua espectador
     p.alive = true; p.kills = 0; p.placement = 0;
-    p.zoneHp = 175; p.lastState = Date.now();
+    p.zoneHp = ZONE_HP; p.lastState = Date.now(); p.canDrop = true;
     match.aliveCount++;
   }
   io.emit('matchStart', { t0: match.t0, serverNow: Date.now(), plan: match.plan, num: match.num });
@@ -205,7 +222,7 @@ function endMatch(winnerId) {
   rankDirty = true;
   io.emit('matchEnd', {
     winner: w ? { id: winnerId, nick: w.nick, kills: w.kills } : null,
-    ranking, globalTop: topRank(), nextIn: 14,
+    ranking, globalTop: topRank(), nextIn: NEXT_IN_S,
   });
   sysChat(w ? `🏆 ${w.nick} VENCEU a partida #${match.num} com ${w.kills} kills!` : 'Partida encerrada sem sobreviventes.');
   console.log(`[MATCH ${match.num}] vencedor: ${w ? w.nick : '(ninguém)'}`);
@@ -214,7 +231,7 @@ function endMatch(winnerId) {
     match.phase = 'LOBBY';
     for (const p of players.values()) { p.spectator = false; p.alive = false; p.placement = 0; }
     io.emit('nextMatch', {}); // clientes recarregam e voltam pro lobby com a seed nova
-  }, 14000);
+  }, NEXT_IN_S * 1000);
 }
 
 function checkVictory() {
@@ -251,17 +268,17 @@ setInterval(() => {
   if (match.phase !== 'PLAYING' || !match.plan) return;
   const t = (Date.now() - match.t0) / 1000;
   const flyT = match.plan.ship.flyTime;
-  if (t < flyT + 25) return; // janela de queda: ninguém é punido ainda
+  if (t < flyT + ZONE_GRACE_S) return; // janela de queda: ninguém é punido ainda
   const zone = zoneAt(t);
   const now = Date.now();
   for (const [id, p] of players) {
     if (p.spectator || !p.alive) continue;
     const outside = Math.hypot(p.pos[0] - zone.x, p.pos[2] - zone.z) > zone.r + 1;
-    const floating = p.pos[1] > 120 && t > flyT + 60;      // nunca pousou
-    const afk = now - (p.lastState || match.t0) > 45000;    // parou de mandar estado
-    if (outside || floating) p.zoneHp -= zone.dps + (floating ? 6 : 0);
+    const floating = p.pos[1] > 120 && t > flyT + FLOAT_AFTER_S; // nunca pousou
+    const afk = now - (p.lastState || match.t0) > AFK_MS;        // parou de mandar estado
+    if (outside || floating) p.zoneHp -= zone.dps * ZONE_DRAIN_X + (floating ? 6 : 0);
     else if (afk) p.zoneHp -= 25;
-    else p.zoneHp = Math.min(175, p.zoneHp + 8);
+    else p.zoneHp = Math.min(ZONE_HP, p.zoneHp + 8);
     if (p.zoneHp <= 0) {
       p.alive = false;
       p.placement = match.aliveCount;
@@ -284,7 +301,7 @@ io.on('connection', socket => {
   players.set(socket.id, {
     nick: 'Recruta', colors: null, kills: 0,
     alive: false, spectator: isMidMatch, placement: 0,
-    pos: [0, 0, 0], lastChat: 0, hitWindow: [], lastState: Date.now(), zoneHp: 175,
+    pos: [0, 0, 0], lastChat: 0, hitWindow: [], lastState: Date.now(), zoneHp: ZONE_HP, canDrop: true,
   });
 
   socket.emit('init', {
@@ -334,8 +351,14 @@ io.on('connection', socket => {
 
   socket.on('state', d => {
     const p = players.get(socket.id);
-    if (!p || !d || !Array.isArray(d.pos)) return;
-    p.pos = d.pos.slice(0, 3).map(Number);
+    if (!p || !d || !Array.isArray(d.pos) || d.pos.length < 3) return;
+    const pos = d.pos.slice(0, 3).map(Number);
+    // NaN/Infinity envenenava a interpolação dos outros clientes e cegava a zona
+    if (!pos.every(Number.isFinite)) return;
+    pos[0] = Math.max(-WORLD, Math.min(WORLD, pos[0]));
+    pos[1] = Math.max(-100, Math.min(600, pos[1]));
+    pos[2] = Math.max(-WORLD, Math.min(WORLD, pos[2]));
+    p.pos = pos;
     p.lastState = Date.now();
     socket.volatile.broadcast.emit('playerUpdate', {
       id: socket.id, pos: p.pos, rotY: +d.rotY || 0,
@@ -347,6 +370,10 @@ io.on('connection', socket => {
   socket.on('shotHit', d => {
     const p = players.get(socket.id);
     if (!p || !d || !players.has(d.targetId)) return;
+    // morto/espectador não atira; fora de partida não existe dano
+    if (match.phase !== 'PLAYING' || !p.alive) return;
+    const victim = players.get(d.targetId);
+    if (!victim.alive) return;
     // anti-flood: no máx 12 acertos reportados por segundo por atirador
     const now = Date.now();
     p.hitWindow = p.hitWindow.filter(t => now - t < 1000);
@@ -365,7 +392,8 @@ io.on('connection', socket => {
     if (!victim || !victim.alive) { if (typeof cb === 'function') cb({}); return; }
     victim.alive = false;
     victim.placement = match.aliveCount; // morreu agora = posição atual
-    const killer = d && d.killerId ? players.get(d.killerId) : null;
+    let killer = d && d.killerId ? players.get(d.killerId) : null;
+    if (killer && killer.spectator) killer = null; // espectador não mata ninguém
     if (killer && d.killerId !== socket.id) killer.kills++;
     io.emit('playerKilled', {
       victimId: socket.id, victimNick: victim.nick,
@@ -387,6 +415,8 @@ io.on('connection', socket => {
     const key = String(d.key).slice(0, 32);
     if (match.openedChests.has(key)) return cb({ ok: false, opened: true });
     match.openedChests.add(key);
+    // baú lendário só existe depois do GOLEM cair — bloqueia claim antecipado
+    if (key === 'boss' && !match.bossDead) { match.openedChests.delete(key); return cb({ ok: false }); }
     const rng = mulberry32((match.seed ^ [...key].reduce((a, c) => a * 31 + c.charCodeAt(0) | 0, 7)) >>> 0);
     const items = key === 'boss'
       ? [{ type: 'weapon', rarity: 'lendário', weapon: 4, ammo: 160 }, { type: 'armor', amount: 100 }, { type: 'med' }, { type: 'med' }]
@@ -397,16 +427,26 @@ io.on('connection', socket => {
 
   /* drop de morte: espalha itens no chão, primeiro a pegar leva */
   socket.on('deathDrop', d => {
+    const p = players.get(socket.id);
+    if (!p || match.phase !== 'PLAYING') return;
+    if (!p.canDrop) return; // um drop por vida — sem spam de loot
     if (!d || !Array.isArray(d.pos) || !Array.isArray(d.items)) return;
+    const pos = d.pos.slice(0, 3).map(Number);
+    if (!pos.every(Number.isFinite)) return;
+    p.canDrop = false;
     const id = 'drop' + (++match.dropSeq);
     const items = d.items.slice(0, 8); // armas + munição + colete + kit
-    match.drops.set(id, { pos: d.pos.slice(0, 3), items, taken: false });
-    io.emit('dropSpawn', { id, pos: d.pos.slice(0, 3), items });
+    match.drops.set(id, { pos, items, taken: false });
+    io.emit('dropSpawn', { id, pos, items });
   });
   socket.on('takeDrop', (d, cb) => {
     if (typeof cb !== 'function') return;
+    const p = players.get(socket.id);
     const drop = d && match.drops.get(d.id);
-    if (!drop || drop.taken) return cb({ ok: false });
+    if (!p || !p.alive || !drop || drop.taken) return cb({ ok: false });
+    // só pega se está perto de verdade (anti "aspirador" de loot à distância)
+    const dx = p.pos[0] - drop.pos[0], dz = p.pos[2] - drop.pos[2];
+    if (dx * dx + dz * dz > 12 * 12) return cb({ ok: false });
     drop.taken = true;
     io.emit('dropTaken', { id: d.id });
     cb({ ok: true, items: drop.items });
@@ -414,6 +454,8 @@ io.on('connection', socket => {
 
   /* boss sincronizado: HP mora aqui */
   socket.on('bossHit', d => {
+    const p = players.get(socket.id);
+    if (!p || !p.alive) return;
     if (match.phase !== 'PLAYING' || match.bossDead) return;
     const dmg = Math.min(Math.max(+((d || {}).dmg) || 0, 0), 150);
     match.bossHp = Math.max(0, match.bossHp - dmg);

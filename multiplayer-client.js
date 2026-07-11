@@ -320,9 +320,19 @@
       renderGlobal(window.__BR_lastGlobalTop || INIT.globalTop);
       refreshLobbyRoster();
     }
+    /* o painel #settings do jogo é "emprestado" pro lobby; antes de qualquer
+       innerHTML no lobby ele PRECISA voltar pro menu, senão é destruído junto */
+    function rescueSettings() {
+      const st = document.getElementById('settings');
+      if (st && st.closest('#brLobby')) {
+        st.classList.remove('open');
+        const panel = document.getElementById('panel');
+        if (panel) panel.appendChild(st);
+      }
+    }
     const LOBBY = {
-      show(extra) { lobby.innerHTML = lobbyHtml(extra); lobby.style.display = 'flex'; wireLobby(); },
-      hide() { lobby.style.display = 'none'; },
+      show(extra) { rescueSettings(); lobby.innerHTML = lobbyHtml(extra); lobby.style.display = 'flex'; wireLobby(); },
+      hide() { rescueSettings(); lobby.style.display = 'none'; },
       setRoster(list) { lastRosterList = list; refreshLobbyRoster(); },
       renderGlobal,
       countdown(n) {
@@ -333,6 +343,7 @@
         c.textContent = n > 0 ? n : 'VAI!';
       },
       overlay(html) { // telas de morte/vitória usam o mesmo painel
+        rescueSettings();
         lobby.innerHTML = `<div class="brCard">${html}</div>`;
         lobby.style.display = 'flex';
       },
