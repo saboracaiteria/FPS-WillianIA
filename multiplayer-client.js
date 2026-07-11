@@ -396,8 +396,13 @@
         if (panel) panel.appendChild(st);
       }
     }
+    const soltarMouse = () => {
+      // painel na tela exige mouse livre: sem isto, quem entrou com o jogo
+      // rodando (pointer lock) ficava preso sem conseguir clicar/editar
+      try { if (document.pointerLockElement) document.exitPointerLock(); } catch (e) {}
+    };
     const LOBBY = {
-      show(extra) { rescueSettings(); lobby.innerHTML = lobbyHtml(extra); lobby.style.display = 'flex'; wireLobby(); },
+      show(extra) { soltarMouse(); rescueSettings(); lobby.innerHTML = lobbyHtml(extra); lobby.style.display = 'flex'; wireLobby(); },
       hide() { rescueSettings(); lobby.style.display = 'none'; },
       setRoster(list) { lastRosterList = list; refreshLobbyRoster(); },
       renderGlobal,
@@ -409,6 +414,7 @@
         c.textContent = n > 0 ? n : 'VAI!';
       },
       overlay(html) { // telas de morte/vitória usam o mesmo painel
+        soltarMouse();
         rescueSettings();
         lobby.innerHTML = `<div class="brCard">${html}</div>`;
         lobby.style.display = 'flex';

@@ -1292,7 +1292,7 @@
 
     /* hook de depuração/testes (inofensivo em produção) */
     window.__BR_debug = {
-      S, zc, crates, remotes, drops,
+      S, zc, crates, remotes, drops, LOBBY,
       get ship() { return ship; },
       jump: jumpFromShip, spect: enterSpectator, openCrate: tryOpenCrate,
       get boss() { return boss; }, get bossHp() { return bossHp; },

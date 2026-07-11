@@ -500,6 +500,43 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.voltouNaPausa, 'menu de pausa não volta a aparecer');
   });
 
+  it('dado multiplayer ativo, então NOVO JOGO fica desabilitado (clique não pode iniciar solo por cima do lobby)', async t => {
+    // bug de playtest: clicar em NOVO JOGO antes do lobby BR aparecer
+    // iniciava jogo solo com pointer lock — jogador preso, só ESC salvava
+    const r = await play(() => {
+      const btn = document.getElementById('btnNew');
+      return {
+        temSocket: !!window.__MP.socket,
+        desabilitado: btn.classList.contains('disabled'),
+        semClique: getComputedStyle(btn).pointerEvents === 'none',
+      };
+    });
+    assert.ok(r.temSocket, 'harness sem multiplayer — teste inválido');
+    assert.ok(r.desabilitado, 'NOVO JOGO continua clicável com multiplayer ativo');
+    assert.ok(r.semClique, 'botão desabilitado ainda recebe cliques');
+  });
+
+  it('dado o lobby aparecendo com o mouse capturado, então o pointer lock é solto (dá pra editar sem ESC)', async t => {
+    const r = await play(() => {
+      const dbg = window.__BR_debug;
+      if (!dbg || !dbg.LOBBY) return { semLobby: true };
+      window.__e2e_exit = false;
+      const orig = document.exitPointerLock;
+      document.exitPointerLock = () => { window.__e2e_exit = true; };
+      Object.defineProperty(document, 'pointerLockElement',
+        { get: () => document.body, configurable: true });
+      dbg.LOBBY.show('');
+      const soltou = window.__e2e_exit === true;
+      dbg.LOBBY.hide();
+      document.exitPointerLock = orig;
+      Object.defineProperty(document, 'pointerLockElement',
+        { get: () => null, configurable: true });
+      return { soltou };
+    });
+    assert.ok(!r.semLobby, 'LOBBY não exposto no __BR_debug');
+    assert.ok(r.soltou, 'lobby apareceu sem soltar o pointer lock (jogador preso)');
+  });
+
   it('rede de segurança: nenhum erro de runtime acumulado durante toda a suite', async t => {
     const errs = await play(() => window.__game.errors.map(e => String(e && e.message || e)));
     assert.deepEqual(errs, [], `erros: ${errs.join(' | ')}`);

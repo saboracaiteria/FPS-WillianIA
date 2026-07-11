@@ -1726,7 +1726,15 @@ function startGame(trusted) {
   }
 }
 /* ---- menu: botões + configurações ---- */
-$('btnNew').addEventListener('click', e => { e.stopPropagation(); startGame(e.isTrusted); });
+$('btnNew').addEventListener('click', e => {
+  e.stopPropagation();
+  if (__mpSocket) return; // sala online: o lobby BR assume — nada de solo por cima
+  startGame(e.isTrusted);
+});
+if (__mpSocket) { // multiplayer no ar: o botão vira aviso até o lobby abrir
+  $('btnNew').classList.add('disabled');
+  $('btnNew').textContent = '🌐 SALA ONLINE — ABRINDO LOBBY...';
+}
 $('btnSettings').addEventListener('click', e => { e.stopPropagation(); $('settings').classList.add('open'); });
 $('btnBack').addEventListener('click', e => { e.stopPropagation(); $('settings').classList.remove('open'); });
 $('settings').addEventListener('click', e => e.stopPropagation());

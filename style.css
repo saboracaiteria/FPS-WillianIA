@@ -151,6 +151,7 @@
   .mbtn:hover { background: linear-gradient(90deg, rgba(255,154,61,0.35), rgba(255,215,106,0.12));
     border-color: #ffd76a; transform: scale(1.04); box-shadow: 0 0 24px rgba(255,170,60,0.25); }
   .mbtn.sec { min-width: 200px; font-size: 12px; opacity: .8; border-color: rgba(255,255,255,0.25); background: rgba(20,28,40,0.4); }
+  .mbtn.disabled { pointer-events: none; opacity: .45; cursor: default; }
 
   /* ===== configurações ===== */
   #settings { display: none; background: rgba(10,16,26,0.7); border: 1px solid rgba(255,255,255,0.15);
