@@ -64,6 +64,10 @@ function topRank(n = 10) {
 /* ---------------- estado da sala/partida ---------------- */
 const WORLD = 1100, LIM = WORLD / 2 - 60; // limites úteis do mapa
 const players = new Map(); // id -> { nick, colors, kills, alive, spectator, placement, pos, lastChat, lastHits: [] }
+
+/* anfitrião: SÓ quem digitar o código vira host (nada de host aleatório).
+   Código fixo abaixo; a variável de ambiente HOST_CODE sobrescreve se quiser trocar. */
+const HOST_CODE = String(process.env.HOST_CODE || 'WILLIAN77').toUpperCase();
 let hostId = null;
 
 const match = {
@@ -169,6 +173,7 @@ function startMatch() {
   for (const p of players.values()) {
     if (p.spectator) continue; // quem entrou tarde continua espectador
     p.alive = true; p.kills = 0; p.placement = 0;
+    p.zoneHp = 175; p.lastState = Date.now();
     match.aliveCount++;
   }
   io.emit('matchStart', { t0: match.t0, serverNow: Date.now(), plan: match.plan, num: match.num });
@@ -220,15 +225,67 @@ function checkVictory() {
   else if (alive.length === 0) endMatch(null);
 }
 
+/* ---------------- zona autoritativa (backstop do servidor) ----------------
+   O dano de gás normal é aplicado pelo cliente, mas cliente com aba oculta
+   congela o loop e ficava "vivo flutuando fora da safe" pra sempre, travando
+   a vitória. Aqui o servidor espelha o círculo e elimina quem o cliente não
+   elimina: fora da zona, flutuando na altitude da nave ou AFK sem mandar estado. */
+function zoneAt(t) {
+  const ph = match.plan.zone;
+  let cur = null, shrinking = false, k = 0;
+  for (const p of ph) {
+    if (t < p.tWaitEnd) { cur = p; break; }
+    if (t < p.tShrinkEnd) { cur = p; shrinking = true; k = (t - p.tWaitEnd) / (p.tShrinkEnd - p.tWaitEnd); break; }
+  }
+  if (!cur) {
+    const last = ph[ph.length - 1];
+    return { x: last.nx, z: last.nz, r: last.r1, dps: last.dps + 3 };
+  }
+  if (shrinking) return {
+    x: cur.cx + (cur.nx - cur.cx) * k, z: cur.cz + (cur.nz - cur.cz) * k,
+    r: cur.r0 + (cur.r1 - cur.r0) * k, dps: cur.dps,
+  };
+  return { x: cur.cx, z: cur.cz, r: cur.r0, dps: cur.dps };
+}
+setInterval(() => {
+  if (match.phase !== 'PLAYING' || !match.plan) return;
+  const t = (Date.now() - match.t0) / 1000;
+  const flyT = match.plan.ship.flyTime;
+  if (t < flyT + 25) return; // janela de queda: ninguém é punido ainda
+  const zone = zoneAt(t);
+  const now = Date.now();
+  for (const [id, p] of players) {
+    if (p.spectator || !p.alive) continue;
+    const outside = Math.hypot(p.pos[0] - zone.x, p.pos[2] - zone.z) > zone.r + 1;
+    const floating = p.pos[1] > 120 && t > flyT + 60;      // nunca pousou
+    const afk = now - (p.lastState || match.t0) > 45000;    // parou de mandar estado
+    if (outside || floating) p.zoneHp -= zone.dps + (floating ? 6 : 0);
+    else if (afk) p.zoneHp -= 25;
+    else p.zoneHp = Math.min(175, p.zoneHp + 8);
+    if (p.zoneHp <= 0) {
+      p.alive = false;
+      p.placement = match.aliveCount;
+      io.emit('playerKilled', {
+        victimId: id, victimNick: p.nick,
+        killerId: null, killerNick: null, killerKills: 0,
+        weapon: 'ZONA', byZone: true, placement: p.placement,
+      });
+      console.log(`[ZONA] servidor eliminou ${p.nick} (fora=${outside} voando=${floating} afk=${afk})`);
+      broadcastRoster();
+      checkVictory();
+      if (match.phase !== 'PLAYING') break; // partida acabou dentro do loop
+    }
+  }
+}, 1000);
+
 /* ---------------- conexões ---------------- */
 io.on('connection', socket => {
   const isMidMatch = match.phase === 'PLAYING' || match.phase === 'ENDED';
   players.set(socket.id, {
     nick: 'Recruta', colors: null, kills: 0,
     alive: false, spectator: isMidMatch, placement: 0,
-    pos: [0, 0, 0], lastChat: 0, hitWindow: [],
+    pos: [0, 0, 0], lastChat: 0, hitWindow: [], lastState: Date.now(), zoneHp: 175,
   });
-  if (!hostId) hostId = socket.id;
 
   socket.emit('init', {
     id: socket.id,
@@ -260,13 +317,30 @@ io.on('connection', socket => {
     if (socket.id === hostId && (match.phase === 'LOBBY')) startCountdown();
   });
 
+  /* vira anfitrião apresentando o código (impresso no console do servidor) */
+  socket.on('claimHost', (d, cb) => {
+    const p = players.get(socket.id);
+    const ok = !!p && clean(d && d.code).toUpperCase() === HOST_CODE;
+    if (ok && hostId !== socket.id) {
+      hostId = socket.id;
+      sysChat(`👑 ${p.nick} agora é o anfitrião`);
+      broadcastRoster();
+    }
+    if (typeof cb === 'function') cb({ ok });
+  });
+
+  /* latência: o cliente mede o RTT deste ack */
+  socket.on('pingx', cb => { if (typeof cb === 'function') cb(); });
+
   socket.on('state', d => {
     const p = players.get(socket.id);
     if (!p || !d || !Array.isArray(d.pos)) return;
     p.pos = d.pos.slice(0, 3).map(Number);
+    p.lastState = Date.now();
     socket.volatile.broadcast.emit('playerUpdate', {
       id: socket.id, pos: p.pos, rotY: +d.rotY || 0,
-      ship: !!d.ship, chute: !!d.chute, nick: p.nick, colors: p.colors,
+      ship: !!d.ship, chute: !!d.chute, car: Number.isInteger(d.car) ? d.car : -1,
+      nick: p.nick, colors: p.colors,
     });
   });
 
@@ -325,7 +399,7 @@ io.on('connection', socket => {
   socket.on('deathDrop', d => {
     if (!d || !Array.isArray(d.pos) || !Array.isArray(d.items)) return;
     const id = 'drop' + (++match.dropSeq);
-    const items = d.items.slice(0, 6);
+    const items = d.items.slice(0, 8); // armas + munição + colete + kit
     match.drops.set(id, { pos: d.pos.slice(0, 3), items, taken: false });
     io.emit('dropSpawn', { id, pos: d.pos.slice(0, 3), items });
   });
@@ -366,7 +440,8 @@ io.on('connection', socket => {
   socket.on('disconnect', () => {
     const p = players.get(socket.id);
     players.delete(socket.id);
-    if (hostId === socket.id) hostId = players.keys().next().value || null;
+    // host não migra pra gente aleatória: fica vago até alguém dar o código de novo
+    if (hostId === socket.id) hostId = null;
     io.emit('playerLeft', { id: socket.id });
     if (p) sysChat(`${p.nick} saiu`);
     if (p && p.alive) { p.alive = false; checkVictory(); }
@@ -378,4 +453,9 @@ io.on('connection', socket => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Servidor BR no ar em http://localhost:${PORT} · seed inicial ${match.seed}`);
+  console.log('====================================================');
+  console.log(`  CÓDIGO DO ANFITRIÃO: ${HOST_CODE}`);
+  console.log('  cole no lobby (campo "código do anfitrião") ou');
+  console.log(`  abra o jogo com ?host=${HOST_CODE} na URL`);
+  console.log('====================================================');
 });

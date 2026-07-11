@@ -215,6 +215,16 @@
             <div class="brH">NA SALA</div>
             <div class="brPlayers" id="brLobbyList">—</div>
             <button class="brBtn" id="brStartBtn" disabled>AGUARDANDO O ANFITRIÃO...</button>
+            <div class="brH">ANFITRIÃO</div>
+            <div style="display:flex;gap:6px">
+              <input id="brHostCode" class="brInput" type="password" maxlength="12" placeholder="código do anfitrião"
+                autocomplete="new-password" spellcheck="false" style="flex:1">
+              <button class="brBtn" id="brHostBtn" style="width:auto;margin-top:0;padding:8px 14px;font-size:12px">OK</button>
+            </div>
+            <div id="brHostMsg" style="font-size:11px;opacity:.75;margin-top:4px"></div>
+            <button class="brBtn" id="brCfgBtn"
+              style="background:#3a4250;color:#e8f1f8;margin-top:10px">⚙ GRÁFICOS &amp; ÁUDIO</button>
+            <div id="brCfgHolder"></div>
           </div>
           <div class="brCol">
             <div class="brH">🏆 RANKING GLOBAL</div>
@@ -245,11 +255,30 @@
          ${esc(p.nick)}${p.id === S.hostId ? ' 👑' : ''}${p.spectator ? ' <i style="opacity:.5">(espectador)</i>' : ''}</div>`).join('')
         || '<div style="opacity:.5">só você por enquanto — chama a galera!</div>';
       const btn = document.getElementById('brStartBtn');
+      const isHost = INIT.id === S.hostId;
       if (btn) {
-        const isHost = INIT.id === S.hostId;
         btn.disabled = !isHost;
-        btn.textContent = isHost ? '▶ COMEÇAR PARTIDA' : 'AGUARDANDO O ANFITRIÃO...';
+        btn.textContent = isHost ? '▶ COMEÇAR PARTIDA'
+          : (S.hostId ? 'AGUARDANDO O ANFITRIÃO...' : 'SEM ANFITRIÃO — use o código abaixo');
       }
+      const hm = document.getElementById('brHostMsg');
+      if (hm && isHost) hm.textContent = '👑 você é o anfitrião — só você inicia a partida';
+    }
+    /* vira anfitrião com o código impresso no console do servidor;
+       fica salvo no navegador e é re-enviado a cada reload (nextMatch recarrega a página) */
+    function claimHost(code, silent) {
+      code = String(code || '').trim();
+      if (!code) return;
+      socket.timeout(3000).emit('claimHost', { code }, (err, res) => {
+        const hm = document.getElementById('brHostMsg');
+        if (!err && res && res.ok) {
+          try { localStorage.setItem('br_hostcode', code); } catch (e) {}
+          if (hm) hm.textContent = '👑 você é o anfitrião — só você inicia a partida';
+        } else {
+          try { localStorage.removeItem('br_hostcode'); } catch (e) {}
+          if (hm && !silent) hm.textContent = '✖ código errado';
+        }
+      });
     }
     function wireLobby() {
       const nickEl = document.getElementById('brNick');
@@ -267,6 +296,27 @@
       }
       const btn = document.getElementById('brStartBtn');
       if (btn) btn.addEventListener('click', () => socket.emit('requestStart'));
+      const hIn = document.getElementById('brHostCode'), hBtn = document.getElementById('brHostBtn');
+      if (hBtn) hBtn.addEventListener('click', () => claimHost(hIn.value));
+      if (hIn) hIn.addEventListener('keydown', e => { if (e.key === 'Enter') claimHost(hIn.value); });
+      // configurações de gráfico/áudio do jogo, acessíveis direto do lobby:
+      // o painel #settings do menu base é "emprestado" pro card e devolvido no VOLTAR
+      const cfgBtn = document.getElementById('brCfgBtn'), holder = document.getElementById('brCfgHolder');
+      const stEl = document.getElementById('settings');
+      if (cfgBtn && stEl) {
+        cfgBtn.addEventListener('click', () => { holder.appendChild(stEl); stEl.classList.add('open'); });
+        const back = document.getElementById('btnBack');
+        if (back && !window.__BR_cfgBackWired) {
+          window.__BR_cfgBackWired = true;
+          back.addEventListener('click', () => {
+            if (stEl.parentElement && stEl.parentElement.id === 'brCfgHolder') {
+              stEl.classList.remove('open');
+              const panel = document.getElementById('panel');
+              if (panel) panel.appendChild(stEl);
+            }
+          });
+        }
+      }
       renderGlobal(window.__BR_lastGlobalTop || INIT.globalTop);
       refreshLobbyRoster();
     }
@@ -289,6 +339,19 @@
     };
 
     socket.emit('hello', { nick: S.nick, colors: S.myColors });
+
+    /* ---------- ping (mostrado ao lado do FPS quando habilitado) ---------- */
+    setInterval(() => {
+      const t0 = performance.now();
+      socket.timeout(4000).emit('pingx', err => {
+        if (!err) window.__MP_ping = Math.round(performance.now() - t0);
+      });
+    }, 2000);
+
+    /* ---------- reivindica anfitrião: código salvo ou ?host=CODIGO na URL ---------- */
+    const urlCode = new URLSearchParams(location.search).get('host');
+    const savedCode = (() => { try { return localStorage.getItem('br_hostcode'); } catch (e) { return null; } })();
+    if (urlCode || savedCode) claimHost(urlCode || savedCode, true);
 
     /* entrega tudo pra parte 2 (lógica da partida) */
     window.__BR_game.start({ MP, G, INIT, socket, S, UI, LOBBY, esc, seededRng });

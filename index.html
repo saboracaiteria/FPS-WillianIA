@@ -158,7 +158,6 @@
   .mbtn:hover { background: linear-gradient(90deg, rgba(255,154,61,0.35), rgba(255,215,106,0.12));
     border-color: #ffd76a; transform: scale(1.04); box-shadow: 0 0 24px rgba(255,170,60,0.25); }
   .mbtn.sec { min-width: 200px; font-size: 12px; opacity: .8; border-color: rgba(255,255,255,0.25); background: rgba(20,28,40,0.4); }
-  #saveInfo { color: rgba(160,200,160,0.8); font-size: 11px; letter-spacing: 2px; margin-top: 8px; }
 
   /* ===== configurações ===== */
   #settings { display: none; background: rgba(10,16,26,0.7); border: 1px solid rgba(255,255,255,0.15);
@@ -311,7 +310,7 @@
       <div class="ctl"><span class="key">CTRL</span> Agachar / Deslizar</div>
       <div class="ctl"><span class="key">🖱 ESQ / DIR</span> Atirar / Mirar</div>
       <div class="ctl"><span class="key">R</span> Recarregar</div>
-      <div class="ctl"><span class="key">E</span> Veículo / Baú / Salvar</div>
+      <div class="ctl"><span class="key">E</span> Veículo / Baú</div>
       <div class="ctl"><span class="key">1-5</span> Armas (ou scroll)</div>
       <div class="ctl"><span class="key">G</span> Granada</div>
       <div class="ctl"><span class="key">Q</span> Kit médico</div>
@@ -319,24 +318,22 @@
       <div class="ctl"><span class="key">TAB</span> Inventário &nbsp;·&nbsp; <span class="key">F</span> Comer carne</div>
     </div>
     <div id="menuBtns">
-      <div class="mbtn" id="btnContinue" style="display:none">▶ &nbsp;CONTINUAR</div>
       <div class="mbtn" id="btnNew">NOVO JOGO</div>
       <div class="mbtn sec" id="btnSettings">⚙ &nbsp;CONFIGURAÇÕES</div>
-      <div id="saveInfo"></div>
     </div>
     <div id="settings">
       <div class="srow"><span>Volume geral</span><input type="range" id="setVol" min="0" max="100" value="50"></div>
-      <div class="srow"><span>Música</span><input type="range" id="setMus" min="0" max="100" value="50"></div>
       <div class="srow"><span>Resolução</span><select id="setRes"><option value="1">Desempenho</option><option value="1.5" selected>Equilibrado</option><option value="2">Qualidade</option></select></div>
       <div class="srow"><span>Sombras</span><select id="setShadow"><option value="1" selected>Ligadas</option><option value="0">Desligadas</option></select></div>
       <div class="srow"><span>Bloom</span><select id="setBloom"><option value="1" selected>Ligado</option><option value="0">Desligado</option></select></div>
+      <div class="srow"><span>Mostrar ping</span><select id="setPing"><option value="1" selected>Sim</option><option value="0">Não</option></select></div>
       <div class="mbtn sec" id="btnBack" style="margin-top:14px">VOLTAR</div>
     </div>
-    <div id="loadingMsg">ESC pausa · o jogo salva nos terminais verdes espalhados pelo mapa</div>
+    <div id="loadingMsg">ESC pausa o jogo</div>
     <div id="pausedTag">— PAUSADO —</div>
   </div>
 </div>
-<div id="deathScreen"><div id="deathTitle">VOCÊ MORREU</div><div id="deathSub">voltando ao último save...</div></div>
+<div id="deathScreen"><div id="deathTitle">VOCÊ MORREU</div><div id="deathSub">reiniciando...</div></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script type="importmap">
@@ -421,9 +418,9 @@ const CFG = {
   EXPOSURE:         0.58,
 };
 
-/* ===== save & configurações (localStorage) ===== */
-const SAVE = (() => { try { return JSON.parse(localStorage.getItem('callofai_save') || 'null'); } catch (e) { return null; } })();
-const SETTINGS = Object.assign({ vol: 0.5, mus: 0.5, res: 1.5, shadow: 1, bloom: 1 },
+/* ===== configurações (localStorage) — sistema de save foi removido ===== */
+const SAVE = null;
+const SETTINGS = Object.assign({ vol: 0.5, res: 1.5, shadow: 1, bloom: 1, ping: 1 },
   (() => { try { return JSON.parse(localStorage.getItem('callofai_cfg') || '{}'); } catch (e) { return {}; } })());
 function persistSettings() { localStorage.setItem('callofai_cfg', JSON.stringify(SETTINGS)); }
 
@@ -503,20 +500,18 @@ const SFX = (() => {
   // motor do carro (2 osciladores dessintonizados + sub + escape com ruído)
   let engineOsc = null, engineOsc2 = null, engineSub = null, engineGain = null, engineFilter = null, engineLfo = null, exhGain = null;
   let heliGain = null, heliLfo = null;
-  // trilha sonora procedural: pads em acordes + camada de tensão + vento
-  let musicOn = false, padOscs = [], padGain = null, tenGain = null, windGain = null, rainGain = null, rainAmt = 0;
-  let chordIdx = 0, chordTimer = 0;
-  const CHORDS = [ // Am -> F -> C -> G com condução de vozes suave
-    [220.0, 261.63, 329.63],
-    [220.0, 261.63, 349.23],
-    [196.0, 261.63, 329.63],
-    [196.0, 246.94, 293.66],
-  ];
+  // sem música/vento: só a camada de chuva reage ao clima
+  let musicOn = false, rainGain = null, rainAmt = 0;
   function init() {
     if (ctx) return;
     try {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
-      master = ctx.createGain(); master.gain.value = SETTINGS.vol; master.connect(ctx.destination);
+      master = ctx.createGain(); master.gain.value = SETTINGS.vol;
+      // compressor no master: tiros com mais punch sem estourar o mix
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -18; comp.knee.value = 22; comp.ratio.value = 6;
+      comp.attack.value = 0.004; comp.release.value = 0.16;
+      master.connect(comp); comp.connect(ctx.destination);
       const len = ctx.sampleRate * 1.2;
       noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
       const d = noiseBuf.getChannelData(0);
@@ -546,10 +541,10 @@ const SFX = (() => {
   return {
     init,
     resume() { if (ctx && ctx.state === 'suspended') ctx.resume(); },
-    shot(kind) { // timbre por arma
-      if (kind === 'shotgun') { noise(0.34, 0.65, 3000, 110, 0.6); blip(92, 0.2, 'square', 0.17, -50); }
-      else if (kind === 'dmr') { noise(0.2, 0.55, 6200, 200, 0.9); blip(190, 0.1, 'square', 0.12, -130); setTimeout(() => noise(0.34, 0.1, 700, 90, 0.4), 70); }
-      else { noise(0.16, 0.5, 5200, 240, 0.8); blip(150, 0.08, 'square', 0.12, -90); }
+    shot(kind) { // timbre por arma: estalo agudo + corpo + sub grave (punch)
+      if (kind === 'shotgun') { noise(0.4, 0.72, 3400, 95, 0.6); blip(84, 0.24, 'square', 0.2, -46); blip(46, 0.32, 'sine', 0.3, -14); }
+      else if (kind === 'dmr') { noise(0.22, 0.6, 6800, 170, 0.9); blip(175, 0.12, 'square', 0.14, -120); blip(52, 0.24, 'sine', 0.24, -18); setTimeout(() => noise(0.4, 0.12, 650, 80, 0.4), 70); }
+      else { noise(0.17, 0.55, 5600, 210, 0.8); blip(140, 0.09, 'square', 0.14, -85); blip(58, 0.18, 'sine', 0.22, -22); }
     },
     chirp() { // passarinhos
       if (!ctx) return;
@@ -558,13 +553,13 @@ const SFX = (() => {
         setTimeout(() => blip(rand(2300, 3400), 0.07, 'sine', 0.04, -rand(300, 900)), i * 115 + rand(50));
     },
     enemyShot() { noise(0.14, 0.18, 2600, 200, 0.7); },
-    reload()    { blip(420, 0.05, 'square', 0.08); setTimeout(() => blip(620, 0.05, 'square', 0.08), 130); setTimeout(() => blip(900, 0.06, 'square', 0.1), 320); },
+    reload()    { noise(0.05, 0.14, 2400, 800, 1.5); blip(420, 0.05, 'square', 0.09); setTimeout(() => { noise(0.05, 0.12, 1800, 600, 1.5); blip(620, 0.05, 'square', 0.09); }, 130); setTimeout(() => { noise(0.06, 0.16, 2800, 900, 1.5); blip(900, 0.06, 'square', 0.11); }, 320); },
     empty()     { blip(900, 0.04, 'square', 0.07); },
-    hit()       { blip(1150, 0.06, 'triangle', 0.16); },
-    headshot()  { blip(1500, 0.07, 'triangle', 0.2); blip(2100, 0.09, 'sine', 0.12); },
-    kill()      { blip(740, 0.09, 'triangle', 0.16); setTimeout(() => blip(1180, 0.14, 'triangle', 0.18), 70); },
+    hit()       { blip(1150, 0.055, 'triangle', 0.17); blip(760, 0.045, 'sine', 0.08); },
+    headshot()  { blip(1500, 0.07, 'triangle', 0.22); blip(2100, 0.1, 'sine', 0.14); blip(980, 0.05, 'sine', 0.08); },
+    kill()      { blip(740, 0.09, 'triangle', 0.17); setTimeout(() => blip(1180, 0.14, 'triangle', 0.19), 70); setTimeout(() => blip(1560, 0.16, 'sine', 0.1), 150); },
     hurt()      { noise(0.25, 0.4, 700, 90, 0.5); blip(110, 0.18, 'sawtooth', 0.12, -40); },
-    step(run)   { noise(0.07, run ? 0.1 : 0.06, 900, 180, 0.4); },
+    step(run)   { noise(0.07, run ? 0.1 : 0.06, rand(750, 1050), 180, 0.4); },
     jump()      { noise(0.1, 0.08, 1200, 300, 0.5); },
     land()      { noise(0.16, 0.2, 500, 80, 0.6); },
     carDoor()   { blip(220, 0.08, 'square', 0.12); setTimeout(() => noise(0.1, 0.2, 800, 200), 60); },
@@ -587,7 +582,6 @@ const SFX = (() => {
     whisper()   { noise(1.0, 0.07, 2200, 500, 0.2); },
     deathSting(){ [220, 174, 146, 110].forEach((f, i) => setTimeout(() => blip(f, 0.55, 'triangle', 0.15), i * 230)); },
     eat()       { noise(0.12, 0.16, 1200, 280, 1); blip(300, 0.09, 'sine', 0.1); },
-    saveChime() { blip(660, 0.1, 'sine', 0.12); setTimeout(() => blip(990, 0.16, 'sine', 0.12), 130); },
     unlock()    { [523, 659, 784].forEach((f, i) => setTimeout(() => blip(f, 0.16, 'triangle', 0.14), i * 105)); },
     setVolumes() { if (master) master.gain.setTargetAtTime(SETTINGS.vol, ctx.currentTime, 0.1); },
     engineStart() {
@@ -645,59 +639,18 @@ const SFX = (() => {
       heliGain.gain.setTargetAtTime(on ? 0.15 + lift * 0.06 : 0, ctx.currentTime, 0.35);
       heliLfo.frequency.setTargetAtTime(on ? 12 + lift * 4 : 8, ctx.currentTime, 0.4);
     },
-    musicStart() {
+    musicStart() { // sem música/vento: liga só a camada de chuva (clima)
       if (!ctx || musicOn) return;
       musicOn = true;
-      // pads: 3 vozes x 2 osciladores dessintonizados, filtro suave
-      padGain = ctx.createGain(); padGain.gain.value = 0;
-      const padFilter = ctx.createBiquadFilter(); padFilter.type = 'lowpass'; padFilter.frequency.value = 850; padFilter.Q.value = 0.5;
-      padFilter.connect(padGain); padGain.connect(master);
-      for (let v = 0; v < 3; v++) {
-        for (const det of [-4, 4]) {
-          const o = ctx.createOscillator(); o.type = 'triangle';
-          o.frequency.value = CHORDS[0][v]; o.detune.value = det;
-          const g = ctx.createGain(); g.gain.value = 0.16;
-          o.connect(g); g.connect(padFilter); o.start();
-          padOscs.push({ o, v });
-        }
-      }
-      padGain.gain.setTargetAtTime(0.05, ctx.currentTime, 4);
-      // camada de tensão (combate): baixo pulsante
-      tenGain = ctx.createGain(); tenGain.gain.value = 0; tenGain.connect(master);
-      const tOsc = ctx.createOscillator(); tOsc.type = 'sawtooth'; tOsc.frequency.value = 55;
-      const tF = ctx.createBiquadFilter(); tF.type = 'lowpass'; tF.frequency.value = 170;
-      const tAmp = ctx.createGain(); tAmp.gain.value = 0.5;
-      const tLfo = ctx.createOscillator(); tLfo.frequency.value = 2.3;
-      const tLg = ctx.createGain(); tLg.gain.value = 0.45;
-      tLfo.connect(tLg); tLg.connect(tAmp.gain);
-      tOsc.connect(tF); tF.connect(tAmp); tAmp.connect(tenGain);
-      tOsc.start(); tLfo.start();
-      // vento constante (ganho varia com a velocidade)
-      const w = ctx.createBufferSource(); w.buffer = noiseBuf; w.loop = true;
-      const wF = ctx.createBiquadFilter(); wF.type = 'bandpass'; wF.frequency.value = 430; wF.Q.value = 0.35;
-      windGain = ctx.createGain(); windGain.gain.value = 0.012;
-      w.connect(wF); wF.connect(windGain); windGain.connect(master);
-      w.start();
-      // chuva: ruído agudo em loop, ganho controlado pelo clima
       const r = ctx.createBufferSource(); r.buffer = noiseBuf; r.loop = true;
       const rF = ctx.createBiquadFilter(); rF.type = 'bandpass'; rF.frequency.value = 2800; rF.Q.value = 0.25;
       rainGain = ctx.createGain(); rainGain.gain.value = 0;
       r.connect(rF); rF.connect(rainGain); rainGain.connect(master);
       r.start();
     },
-    musicUpdate(dt, danger, windAmt) {
-      if (!ctx || !musicOn) return;
-      chordTimer -= dt;
-      if (chordTimer <= 0) {
-        chordTimer = 7 + Math.random() * 2.5;
-        chordIdx = (chordIdx + 1) % CHORDS.length;
-        for (const p of padOscs) p.o.frequency.setTargetAtTime(CHORDS[chordIdx][p.v], ctx.currentTime, 1.9);
-      }
-      const mv = SETTINGS.mus / 0.5; // fator do slider de música
-      padGain.gain.setTargetAtTime((danger > 0.5 ? 0.02 : 0.05) * mv, ctx.currentTime, 2.2);
-      tenGain.gain.setTargetAtTime((danger > 0.5 ? 0.055 : 0) * mv, ctx.currentTime, 1.1);
-      windGain.gain.setTargetAtTime(0.012 + windAmt * 0.05, ctx.currentTime, 0.5);
-      if (rainGain) rainGain.gain.setTargetAtTime(rainAmt * 0.13, ctx.currentTime, 1.5);
+    musicUpdate() {
+      if (!ctx || !musicOn || !rainGain) return;
+      rainGain.gain.setTargetAtTime(rainAmt * 0.13, ctx.currentTime, 1.5);
     },
     setRain(k) { rainAmt = k; },
   };
@@ -1607,6 +1560,17 @@ const Structures = (() => {
     cityMat, carSpots, enemyCamps, saveSpots, chestSpots, baseSites, heliSpot, bazookaSpot, towerTopY };
 })();
 
+/* paredes das construções também são sólidas pra física dos veículos —
+   sem isso carro/caminhão atravessavam prédios, fortes e muros */
+for (const b of Structures.walls) {
+  if (b.noCollide) continue;
+  const hx = (b.x1 - b.x0) / 2, hy = (b.y1 - b.y0) / 2, hz = (b.z1 - b.z0) / 2;
+  if (hx < 0.04 || hy < 0.04 || hz < 0.04) continue;
+  const wb = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3(hx, hy, hz)) });
+  wb.position.set((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2);
+  world.addBody(wb);
+}
+
 {
   const lim = CFG.WORLD_SIZE * 0.47;
   let tries = 0;
@@ -2228,7 +2192,6 @@ const arsenal = [
     reloadTime: 0.8, spreadHip: 0, spreadAds: 0, recoilP: 0.3, recoilY: 0.06, kick: 0.07,
     adsFov: 66, hip: [0.3, -0.25, -0.48], ads: [0.16, -0.19, -0.4], melee: true, locked: true }, buildKnife),
 ];
-if (SAVE && SAVE.weapons) for (const i of SAVE.weapons) if (arsenal[i]) arsenal[i].locked = false;
 function unlockWeapon(i, msg) {
   if (!arsenal[i].locked) return;
   arsenal[i].locked = false;
@@ -2290,6 +2253,8 @@ const state = {
 const keys = {};
 const justPressed = new Set();
 window.addEventListener('keydown', e => {
+  // digitando num campo (nick, chat, código do anfitrião): o jogo não captura teclas
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
   if (e.code === 'Space' || e.code === 'ControlLeft' || e.code === 'Tab') e.preventDefault();
   if (!keys[e.code]) justPressed.add(e.code);
   keys[e.code] = true;
@@ -2462,6 +2427,15 @@ function playerUpdate(dt, t) {
     }
   }
   Structures.collide(player.pos, player.radius, 1.7); // paredes das construções
+  // colisão com veículos (círculo aproximado do chassi — antes dava pra atravessar)
+  if (!state.driving) for (const v of Car.vehicles) {
+    const vp = v.group.position;
+    if (Math.abs(player.pos.y - vp.y) > 3) continue;
+    const r = Math.max(v.cfg.half[0], v.cfg.half[2]) * 0.9 + player.radius;
+    const dx = player.pos.x - vp.x, dz = player.pos.z - vp.z;
+    const d = Math.hypot(dx, dz);
+    if (d < r && d > 1e-4) { player.pos.x = vp.x + dx / d * r; player.pos.z = vp.z + dz / d * r; }
+  }
   // limites do mundo
   const lim = CFG.WORLD_SIZE * 0.49;
   player.pos.x = clamp(player.pos.x, -lim, lim);
@@ -3001,8 +2975,8 @@ function playerDamage(dmg, fromPos) {
     timeScale = 0.35; // câmera lenta enquanto cai
     addKillFeed('<b>Você</b> caiu em combate');
     setTimeout(() => ui.deathScreen.classList.add('show'), 600);
-    if (window.__MP_active) setTimeout(() => window.__MP_respawn(), 3600); // online: respawn na sessão
-    else setTimeout(() => location.reload(), 3600); // reset TOTAL — renasce no último save
+    if (window.__MP_active || window.__BR_active) setTimeout(() => window.__MP_respawn(), 3600); // online: fluxo da sessão
+    else setTimeout(() => location.reload(), 3600); // solo: reinicia do zero
   }
 }
 
@@ -4536,7 +4510,9 @@ const Env = (() => {
   const _f = new THREE.Color(), _sd2 = new THREE.Vector3();
 
   function update(dt, t) {
-    tod = (tod + dt / DAY_LEN) % 1;
+    // dia passa devagar, noite passa rápido: dia dura ~3x mais que a noite
+    const dayNow = tod > 0.25 && tod < 0.75;
+    tod = (tod + dt * (dayNow ? 0.62 : 1.9) / DAY_LEN) % 1;
     const ang = (tod - 0.25) * TAU; // nascer do sol ~6h
     const elevDeg = Math.sin(ang) * 58;
     const azimDeg = 155 + Math.cos(ang) * 55;
@@ -5332,19 +5308,6 @@ const Missions = (() => {
    INTERAÇÃO — terminais de save, baús, bazuca, veículos (tecla E)
    ================================================================ */
 const Interact = (() => {
-  const dark = csmMat(new THREE.MeshStandardMaterial({ color: 0x22252b, roughness: 0.6 }));
-  const termMat = new THREE.MeshStandardMaterial({ color: 0x062a12, emissive: 0x35ff7a, emissiveIntensity: 2.2, roughness: 0.4 });
-  for (const s of Structures.saveSpots) {
-    const y = heightAt(s.x, s.z);
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 1.1, 8), dark);
-    post.position.set(s.x, y + 0.55, s.z);
-    scene.add(post);
-    const cube = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), termMat);
-    s.baseY = y + 1.3;
-    cube.position.set(s.x, s.baseY, s.z);
-    scene.add(cube);
-    s.cube = cube;
-  }
   const chestWood = csmMat(new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.7 }));
   const chestGold = csmMat(new THREE.MeshStandardMaterial({ color: 0xc9a04e, metalness: 0.8, roughness: 0.35 }));
   for (const s of Structures.chestSpots) {
@@ -5359,20 +5322,8 @@ const Interact = (() => {
     trim.position.set(s.x, y + 0.46, s.z + 0.24);
     scene.add(trim);
   }
-  const chest = (SAVE && SAVE.chest) ? SAVE.chest : { medkits: 0, nades: 0, meat: 0 };
+  const chest = { medkits: 0, nades: 0, meat: 0 };
 
-  function saveGame() {
-    const data = {
-      score, kills, mission: Missions.idx, tod: Env.tod,
-      inv: { ...inventory }, armor: player.armor,
-      weapons: arsenal.map((w, i) => !w.locked ? i : -1).filter(i => i >= 0),
-      pos: [player.pos.x, player.pos.y, player.pos.z],
-      chest,
-    };
-    localStorage.setItem('callofai_save', JSON.stringify(data));
-    SFX.saveChime();
-    showBanner('JOGO SALVO<small>se você cair, volta deste ponto</small>', 2600);
-  }
   function chestSwap() {
     const stored = chest.medkits + chest.nades + chest.meat;
     if (stored > 0) {
@@ -5395,12 +5346,10 @@ const Interact = (() => {
   function current() {
     if (state.flying) return { txt: 'SAIR DO HELICÓPTERO', fn: () => Heli.exit() };
     if (state.driving) return { txt: 'SAIR DO VEÍCULO', fn: tryToggleCar };
-    if (!window.__BR_active) { // BR: sem save, sem baú de guardar, sem bazuca grátis (loot vem dos baús BR)
+    if (!window.__BR_active) { // BR: sem baú de guardar, sem bazuca grátis (loot vem dos baús BR)
       const bz = Structures.bazookaSpot;
       if (arsenal[3].locked && Math.hypot(player.pos.x - bz.x, player.pos.z - bz.z) < 2.8 && Math.abs(player.pos.y - bz.y) < 3.5)
         return { txt: 'PEGAR BAZUCA', fn: () => unlockWeapon(3, 'tecla 4 para equipar') };
-      for (const s of Structures.saveSpots)
-        if (Math.hypot(player.pos.x - s.x, player.pos.z - s.z) < 2.4) return { txt: 'SALVAR JOGO', fn: saveGame };
       for (const s of Structures.chestSpots)
         if (Math.hypot(player.pos.x - s.x, player.pos.z - s.z) < 2.4) return { txt: 'USAR BAÚ', fn: chestSwap };
     }
@@ -5410,26 +5359,10 @@ const Interact = (() => {
     return null;
   }
   function update(dt, t) {
-    for (const s of Structures.saveSpots) {
-      s.cube.rotation.y += dt * 1.5;
-      s.cube.position.y = s.baseY + Math.sin(t * 2 + s.x) * 0.06;
-    }
     const c = current();
     if (c) ui.prompt.innerHTML = `<b>E</b> &nbsp;${c.txt}`;
     ui.prompt.style.opacity = c ? '1' : '0';
     if (c && justPressed.has('KeyE') && !player.dead) c.fn();
-  }
-  function applySave() {
-    if (!SAVE) return;
-    addScore(SAVE.score || 0, false);
-    kills = SAVE.kills || 0;
-    ui.killsVal.textContent = kills;
-    Object.assign(inventory, SAVE.inv || {});
-    player.armor = SAVE.armor || 0;
-    Missions.idx = SAVE.mission || 0;
-    if (SAVE.tod !== undefined) Env.tod = SAVE.tod;
-    if (SAVE.pos) player.pos.set(SAVE.pos[0], SAVE.pos[1] + 0.2, SAVE.pos[2]);
-    updateInvHUD(); updateArmorHUD(); updateSlotsHUD(); updateAmmoHUD();
   }
   function renderInv() {
     ui.invList.innerHTML =
@@ -5440,7 +5373,7 @@ const Interact = (() => {
        <div class="invRow"><span>Arsenal ${arsenal.filter(w => !w.locked).length}/5</span><span class="k">[T] troca mira</span></div>
        <div class="invRow"><span>Baú: ${chest.medkits}✚ ${chest.nades}● ${chest.meat}🍖</span><span class="k">guarde em baús</span></div>`;
   }
-  return { update, saveGame, applySave, renderInv, chest };
+  return { update, renderInv, chest };
 })();
 
 /* ================== minimapa / radar (canvas 2D) ================== */
@@ -5575,11 +5508,8 @@ function tick(forceDt) {
   Amb.update(dt, t);
   Water.update(t);
 
-  /* áudio dinâmico: camada de tensão em combate, vento com a velocidade */
-  const inDanger = (Boss.alive && Boss.state.active && player.pos.distanceTo(Boss.pos()) < 110) ||
-    Enemies.list.some(e => e.alive && (e.fsm === 'PERSEGUIR' || e.fsm === 'ATACAR'));
-  const windAmt = clamp(Math.hypot(player.vel.x, player.vel.z) / 12 + (state.driving ? Car.speedKmh() / 130 : 0), 0, 1);
-  SFX.musicUpdate(dt, inDanger ? 1 : 0, windAmt);
+  /* áudio de clima (chuva) */
+  SFX.musicUpdate();
 
   /* câmera + arma + HUD dinâmico */
   applyFpsCamera(dt, t);
@@ -5602,11 +5532,12 @@ function tick(forceDt) {
   csm.update();
   composer.render();
 
-  /* contador de FPS */
+  /* contador de FPS (+ ping quando online e habilitado) */
   fpsFrames++; fpsAcc += dt;
   if (fpsAcc >= 0.5) {
     fpsVal = Math.round(fpsFrames / fpsAcc);
-    ui.fps.textContent = fpsVal + ' FPS';
+    const png = (SETTINGS.ping !== 0 && window.__MP_ping != null) ? ' · ' + window.__MP_ping + ' ms' : '';
+    ui.fps.textContent = fpsVal + ' FPS' + png;
     fpsFrames = 0; fpsAcc = 0;
   }
   justPressed.clear();
@@ -5623,9 +5554,8 @@ function startGame(useSave, trusted) {
   if (state.started) return;
   SFX.init(); SFX.resume(); SFX.musicStart(); SFX.setVolumes();
   state.started = true;
-  if (useSave && SAVE) Interact.applySave();
   updateHealthHUD(); updateAmmoHUD(); updateInvHUD(); updateSlotsHUD(); updateArmorHUD();
-  setTimeout(() => showBanner('CALL OF AI<small>siga as missões · salve nos terminais verdes · cuidado com a noite</small>', 5200), 700);
+  setTimeout(() => showBanner('CALL OF AI<small>siga as missões · cuidado com a noite</small>', 5200), 700);
   setPaused(false);
   if (trusted) {
     try { controls.lock(); } catch (err) { state.lockFailed = true; }
@@ -5635,23 +5565,19 @@ function startGame(useSave, trusted) {
 }
 /* ---- menu: botões + configurações ---- */
 $('btnNew').addEventListener('click', e => { e.stopPropagation(); startGame(false, e.isTrusted); });
-$('btnContinue').addEventListener('click', e => { e.stopPropagation(); startGame(true, e.isTrusted); });
-if (SAVE) {
-  $('btnContinue').style.display = '';
-  $('saveInfo').textContent = `save: ${SAVE.score || 0} pts · missão ${(SAVE.mission || 0) + 1}`;
-}
 $('btnSettings').addEventListener('click', e => { e.stopPropagation(); $('settings').classList.add('open'); });
 $('btnBack').addEventListener('click', e => { e.stopPropagation(); $('settings').classList.remove('open'); });
 $('settings').addEventListener('click', e => e.stopPropagation());
 { // bindings das configurações (aplicam ao vivo + persistem)
-  const sv = $('setVol'), sm = $('setMus'), sr = $('setRes'), ss = $('setShadow'), sb = $('setBloom');
-  sv.value = SETTINGS.vol * 100; sm.value = SETTINGS.mus * 100;
+  const sv = $('setVol'), sr = $('setRes'), ss = $('setShadow'), sb = $('setBloom'), sp = $('setPing');
+  sv.value = SETTINGS.vol * 100;
   sr.value = String(SETTINGS.res); ss.value = String(SETTINGS.shadow); sb.value = String(SETTINGS.bloom);
+  sp.value = String(SETTINGS.ping === 0 ? 0 : 1);
   sv.oninput = () => { SETTINGS.vol = sv.value / 100; SFX.setVolumes(); persistSettings(); };
-  sm.oninput = () => { SETTINGS.mus = sm.value / 100; persistSettings(); };
   sr.onchange = () => { SETTINGS.res = +sr.value; renderer.setPixelRatio(Math.min(devicePixelRatio, SETTINGS.res)); composer.setSize(window.innerWidth, window.innerHeight); persistSettings(); };
   ss.onchange = () => { SETTINGS.shadow = +ss.value; renderer.shadowMap.enabled = SETTINGS.shadow === 1; csmMaterials.forEach(m => m.needsUpdate = true); persistSettings(); };
   sb.onchange = () => { SETTINGS.bloom = +sb.value; bloomPass.enabled = SETTINGS.bloom === 1; persistSettings(); };
+  sp.onchange = () => { SETTINGS.ping = +sp.value; persistSettings(); };
 }
 ui.overlay.addEventListener('click', (e) => {
   if (e.target.closest('#menuBtns') || e.target.closest('#settings')) return;

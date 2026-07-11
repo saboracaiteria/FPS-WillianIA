@@ -90,7 +90,7 @@
       const rp = {
         id, nick: nk || '???', alive: true, isBoss: false,
         group, body, targetPos: group.position.clone(), yaw: 0, targetYaw: 0,
-        chute: false, ship: false, hitT: 0, deadT: 0, lastPos: group.position.clone(), speed: 0, walkPh: 0,
+        chute: false, ship: false, car: -1, hitT: 0, deadT: 0, lastPos: group.position.clone(), speed: 0, walkPh: 0,
         sphCache: [
           { c: new THREE.Vector3(), r: 0.28, part: 'head' },
           { c: new THREE.Vector3(), r: 0.42, part: 'body' },
@@ -145,6 +145,7 @@
     /* =============== balística (projéteis com queda) =============== */
     const bullets = [];
     const _bv = new THREE.Vector3(), _bp = new THREE.Vector3();
+    const _yAxis = new THREE.Vector3(0, 1, 0);
     window.__BR_ballistics = function (origin, dir, gun) {
       bullets.push({
         p: origin.clone(), v: dir.clone().multiplyScalar(gun.projSpeed),
@@ -664,17 +665,22 @@
     window.__MP_respawn = function () { // chamado pelo jogo 3.6s após a morte
       MP.setTimeScale(1);
       const killer = S.lastHit && Date.now() - S.lastHit.t < 9000 ? S.lastHit : null;
-      // solta o loot no chão pros outros
+      // solta o loot no chão pros outros: armas + munição + colete + kit
       const items = [];
       for (let i = 0; i < 5; i++) if (!A[i].locked)
         items.push({ type: 'weapon', weapon: i, ammo: A[i].mag + A[i].reserve, rarity: 'raro' });
+      items.push({ type: 'ammo', amount: 60 });
+      items.push({ type: 'armor', amount: 50 });
       if (G.inventory.medkits > 0) items.push({ type: 'med' });
-      if (items.length) socket.emit('deathDrop', { pos: [MP.player.pos.x, MP.player.pos.y, MP.player.pos.z], items });
+      socket.emit('deathDrop', { pos: [MP.player.pos.x, MP.player.pos.y, MP.player.pos.z], items });
       socket.timeout(3000).emit('died',
         { killerId: killer ? killer.shooterId : null, weapon: killer ? killer.weapon : null, byZone: !killer },
         (err, res) => { if (!err && res && res.placement) S.myPlacement = res.placement; showRecap(); });
       setTimeout(showRecap, 1500); // garantia caso o ack não venha
     };
+    // o jogo checa esta flag na morte: sem ela, cairia no location.reload() do solo
+    // e a morte nunca seria reportada ao servidor (kill perdida + fantasma na partida)
+    window.__MP_active = true;
     let recapShown = false;
     function showRecap() {
       if (recapShown || S.phase === 'ENDED') return;
@@ -788,6 +794,7 @@
       rp.targetYaw = d.rotY || 0;
       rp.ship = !!d.ship;
       rp.chute = !!d.chute;
+      rp.car = typeof d.car === 'number' ? d.car : -1;
     });
     socket.on('playerLeft', d => removeRemote(d.id));
     socket.on('youWereHit', d => {
@@ -919,16 +926,28 @@
     setInterval(() => {
       if (!window.__BR_active || !MP.state.started || MP.state.paused) return;
       if (S.phase === 'SPECT' || S.phase === 'ENDED' || MP.player.dead) return;
-      const p = MP.player.pos;
-      let rotY = 0;
-      _eul.setFromQuaternion(MP.camera.quaternion);
-      rotY = _eul.y;
+      let p = MP.player.pos, rotY, car = -1;
+      if (G.state.driving) { // dentro de carro: manda a pose do VEÍCULO, não a do boneco
+        car = G.Car.vehicles.findIndex(v => v.group === G.Car.group);
+        p = G.Car.group.position;
+        _eul.setFromQuaternion(G.Car.group.quaternion);
+        rotY = _eul.y;
+      } else {
+        _eul.setFromQuaternion(MP.camera.quaternion);
+        rotY = _eul.y;
+      }
       socket.volatile.emit('state', {
-        pos: [p.x, p.y, p.z], rotY,
+        pos: [p.x, p.y, p.z], rotY, car,
         ship: S.phase === 'SHIP', chute: S.phase === 'FALL' && S.chuteOpen,
       });
     }, 100);
     const _eul = new THREE.Euler(0, 0, 0, 'YXZ');
+
+    /* watchdog do pulo automático: roda em setInterval porque o loop de frames
+       congela em aba oculta — sem isto o jogador ficava eternamente "na nave" */
+    setInterval(() => {
+      if (S.phase === 'SHIP' && S.plan && S.matchT() >= S.plan.ship.flyTime) jumpFromShip();
+    }, 500);
 
     /* =============== loop principal do BR =============== */
     const _shipV = new THREE.Vector3();
@@ -949,7 +968,8 @@
           if (rp.deadT >= 1.2) rp.group.visible = false;
           continue;
         }
-        rp.group.visible = rp.alive && !rp.ship;
+        // visível também na nave (todo mundo viaja no convés); some dentro de carro
+        rp.group.visible = rp.alive && rp.car < 0;
         rp.group.position.lerp(rp.targetPos, k);
         let dy = rp.targetYaw - rp.yaw;
         dy = Math.atan2(Math.sin(dy), Math.cos(dy));
@@ -968,6 +988,30 @@
           rp.hitT -= dt;
           for (const m of rp.body.mats) { m.emissive.setHex(0xff2222); m.emissiveIntensity = Math.max(0, rp.hitT * 3); }
         }
+        // dirigindo: o carro correspondente segue o jogador remoto (antes ficava
+        // um boneco flutuando e o carro parado no estacionamento)
+        if (rp.car >= 0) {
+          const v = G.Car.vehicles[rp.car];
+          if (v && !(G.state.driving && v.group === G.Car.group)) {
+            v.chassisBody.position.set(rp.group.position.x, rp.group.position.y, rp.group.position.z);
+            v.chassisBody.velocity.set(0, 0, 0);
+            v.chassisBody.angularVelocity.set(0, 0, 0);
+            v.chassisBody.quaternion.setFromAxisAngle(_yAxis, rp.yaw);
+          }
+        }
+      }
+
+      /* corpo a corpo: não dá pra atravessar outro jogador vivo */
+      if (S.phase === 'PLAY' && !MP.player.dead && !window.__BR_freeze) {
+        const P = MP.player.pos;
+        for (const rp of remotes.values()) {
+          if (!rp.alive || rp.car >= 0) continue;
+          const g = rp.group.position;
+          if (Math.abs(P.y - g.y) > 2.2) continue;
+          const dx = P.x - g.x, dz = P.z - g.z;
+          const d = Math.hypot(dx, dz), min = 0.8;
+          if (d < min && d > 1e-4) { P.x = g.x + dx / d * min; P.z = g.z + dz / d * min; }
+        }
       }
 
       stepBullets(dt);
@@ -982,7 +1026,8 @@
         const sp = S.plan.ship;
         ship.g.rotation.y = Math.atan2(sp.to[0] - sp.from[0], sp.to[1] - sp.from[1]);
         if (S.phase === 'SHIP') {
-          MP.player.pos.set(_shipV.x + seatOx, _shipV.y - 4.2, _shipV.z + seatOz);
+          // em cima do disco (antes ficava 4m ABAIXO do casco: ninguém via a nave, só gente flutuando)
+          MP.player.pos.set(_shipV.x + seatOx, _shipV.y + 1.35, _shipV.z + seatOz);
           MP.player.vel.set(0, 0, 0);
           if (tm >= sp.flyTime) jumpFromShip(); // fim da rota: todo mundo pula
           UI.hint(`🛸 NA NAVE — [ESPAÇO] pra pular · auto em ${Math.max(0, sp.flyTime - tm).toFixed(0)}s`);
