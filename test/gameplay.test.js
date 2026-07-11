@@ -471,6 +471,35 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.overlayPausa, 'menu de pausa não apareceu no ESC');
   });
 
+  it('dado o início da partida, então o menu some IMEDIATAMENTE (sem esperar transição de opacity)', async t => {
+    // bug de playtest: hitch da geração da partida segurava a transição de
+    // 0,6s e o menu NOVO JOGO ficava na tela por cima do jogo
+    const r = await play(() => {
+      const MP = window.QA.MP;
+      const ov = document.getElementById('overlay');
+      MP.state.paused = true; // simula estado de menu
+      ov.classList.remove('hidden');
+      ov.style.display = '';
+      window.__game.forceStart(); // já started: forceStart não repete
+      // caminho real: despausar (matchStart -> setPaused(false))
+      window.__BR_debug ? null : null;
+      // usa o mesmo caminho do jogo: lock mockado dispara setPaused(false)
+      Object.defineProperty(document, 'pointerLockElement',
+        { get: () => document.body, configurable: true });
+      document.dispatchEvent(new Event('pointerlockchange'));
+      const escondidoJa = getComputedStyle(ov).display === 'none';
+      Object.defineProperty(document, 'pointerLockElement',
+        { get: () => null, configurable: true });
+      document.dispatchEvent(new Event('pointerlockchange'));
+      const voltouNaPausa = getComputedStyle(ov).display !== 'none';
+      MP.state.paused = false;
+      ov.classList.add('hidden');
+      return { escondidoJa, voltouNaPausa };
+    });
+    assert.ok(r.escondidoJa, 'menu ainda ocupa a tela após despausar (esperando transição)');
+    assert.ok(r.voltouNaPausa, 'menu de pausa não volta a aparecer');
+  });
+
   it('rede de segurança: nenhum erro de runtime acumulado durante toda a suite', async t => {
     const errs = await play(() => window.__game.errors.map(e => String(e && e.message || e)));
     assert.deepEqual(errs, [], `erros: ${errs.join(' | ')}`);

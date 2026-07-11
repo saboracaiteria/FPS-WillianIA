@@ -635,6 +635,9 @@ function setPaused(p) {
   state.paused = p;
   ui.overlay.classList.toggle('hidden', !p);
   ui.overlay.classList.toggle('paused', p && state.started);
+  // display síncrono: a transição de opacity trava junto com o hitch da
+  // geração da partida e o menu ficava na tela por cima do jogo
+  ui.overlay.style.display = p ? 'flex' : 'none';
   ui.hud.classList.toggle('on', !p);
 }
 
@@ -1713,7 +1716,8 @@ function startGame(trusted) {
   SFX.init(); SFX.resume(); SFX.musicStart(); SFX.setVolumes();
   state.started = true;
   updateHealthHUD(); updateAmmoHUD(); updateInvHUD(); updateSlotsHUD(); updateArmorHUD();
-  setTimeout(() => showBanner('CALL OF AI<small>siga as missões · cuidado com a noite</small>', 5200), 700);
+  // banner de boas-vindas é do modo solo; no BR o lobby já anuncia a partida
+  setTimeout(() => { if (!window.__BR_active) showBanner('CALL OF AI<small>siga as missões · cuidado com a noite</small>', 5200); }, 700);
   setPaused(false);
   if (trusted) {
     try { controls.lock(); } catch (err) { state.lockFailed = true; }
