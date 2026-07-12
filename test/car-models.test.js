@@ -60,9 +60,9 @@ describe('Modelos 3D dos veículos', { skip: !CHROME && 'Chrome não encontrado'
     assert.equal(report.hasReady, true, 'Car.ready não foi exposto');
     assert.ok(report.vehicles.length >= 3, 'frota incompleta');
     assert.deepEqual([...new Set(report.vehicles.map(v => v.url))].sort(), [
-      '/assets/models/gumball-car.optimized.glb',
-      '/assets/models/mazda-rx7.v2.glb',
-      '/assets/models/truck-drifter.optimized.glb',
+      '/assets/models/Veículos/gumball-car.optimized.glb',
+      '/assets/models/Veículos/mazda-rx7.v2.glb',
+      '/assets/models/Veículos/truck-drifter.optimized.glb',
     ]);
     for (const v of report.vehicles) {
       assert.equal(v.status, 'ready', `modelo não carregou: ${v.url} (${v.error || 'sem detalhe'})`);

@@ -28,11 +28,11 @@ app.use((req, res, next) => {
 // whitelist explícita: nada de server.js/node_modules baixável por qualquer um
 const PUBLIC = ['index.html', 'style.css', 'game.js', 'multiplayer-client.js', 'br-game.js',
   'city-destruction-client.js', 'city-destruction-protocol.js'];
-const MODEL_ASSETS = ['gumball-car.optimized.glb', 'truck-drifter.optimized.glb', 'mazda-rx7.v2.glb'];
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 for (const f of PUBLIC) app.get('/' + f, (req, res) => res.sendFile(path.join(__dirname, f)));
-for (const f of MODEL_ASSETS)
-  app.get('/assets/models/' + f, (req, res) => res.sendFile(path.join(__dirname, 'assets', 'models', f)));
+// modelos 3D: static restrito à pasta (o express.static bloqueia path traversal);
+// a pasta agora tem subdiretórios (Armas/, Cenários/, Personagens/, Veículos/)
+app.use('/assets/models', express.static(path.join(__dirname, 'assets', 'models')));
 app.use('/js', express.static(path.join(__dirname, 'js'))); // módulos ES do jogo
 const server = http.createServer(app);
 const io = new Server(server);

@@ -177,17 +177,17 @@ export function createCar(deps) {
   const CFG_BUGGY = { name: 'BUGGY', mass: 280, half: [1.8, 0.38, 0.85],
     wheels: [[1.28, -0.1, 0.8], [1.28, -0.1, -0.8], [-1.28, -0.1, 0.8], [-1.28, -0.1, -0.8]],
     wheelR: 0.5, wheelW: 0.34, force: 1650, steer: 0.55, brake: 32, engine: 'normal',
-    modelUrl: '/assets/models/gumball-car.optimized.glb', modelYaw: Math.PI / 2,
+    modelUrl: '/assets/models/Veículos/gumball-car.optimized.glb', modelYaw: Math.PI / 2,
     build: () => buildPlaceholder([1.8, 0.38, 0.85], 0xe8562a) };
   const CFG_TRUCK = { name: 'CAMINHÃO MILITAR', mass: 680, half: [2.7, 0.55, 1.05],
     wheels: [[1.9, -0.18, 1], [1.9, -0.18, -1], [-1.7, -0.18, 1], [-1.7, -0.18, -1]],
     wheelR: 0.6, wheelW: 0.45, force: 3600, steer: 0.45, brake: 55, grip: 1.6, engine: 'truck',
-    modelUrl: '/assets/models/truck-drifter.optimized.glb', modelYaw: 0,
+    modelUrl: '/assets/models/Veículos/truck-drifter.optimized.glb', modelYaw: 0,
     build: () => buildPlaceholder([2.7, 0.55, 1.05], 0x46523a) };
   const mkSport = c => ({ name: 'ESPORTIVO GT', mass: 420, half: [1.9, 0.32, 0.88],
     wheels: [[1.35, -0.02, 0.82], [1.35, -0.02, -0.82], [-1.3, -0.02, 0.82], [-1.3, -0.02, -0.82]],
     wheelR: 0.42, wheelW: 0.3, force: 5200, steer: 0.5, brake: 60, grip: 2.2, awd: true, engine: 'sport',
-    modelUrl: '/assets/models/mazda-rx7.v2.glb', modelYaw: Math.PI,
+    modelUrl: '/assets/models/Veículos/mazda-rx7.v2.glb', modelYaw: Math.PI,
     bodyTint: c, bodyMaterial: '02_-_Default', // pinta a carroceria, preserva o resto
     build: () => buildPlaceholder([1.9, 0.32, 0.88], c) });
   let cur = makeVehicle(CFG_BUGGY, 7.5, -6);
