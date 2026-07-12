@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 export function createEnemies(deps) {
+  const { Chars } = deps;
   const { CFG, clamp, lerp, damp, rand, TAU, _v1, _v2, _v3, heightAt, slopeAt, terrainNormal, WATER_LEVEL, obstaclesNear, SFX, FX, scene, csmMat, Structures, addScore, addKillFeed, player, playerDamage, addTrauma, Car, Pickups, knuckleMat, lastShotInfo } = deps;
   // dois esquadrões: padrão (verde-oliva) e pesado (cinza-escuro com detalhe laranja)
   const clothG  = csmMat(new THREE.MeshStandardMaterial({ color: 0x4a5240, roughness: 0.75, metalness: 0.05 }));
@@ -188,6 +189,7 @@ export function createEnemies(deps) {
         this.alive = false;
         this.fsm = 'MORTO';
         this.deadT = 0;
+        if (this.mixer) this.mixer.timeScale = 0; // congela a pose no tombo
         this.respawnT = rand(7, 12);
         this.ragVel.set(dir.x, 0, dir.z).normalize().multiplyScalar(rand(5, 8));
         this.ragVel.y = rand(3, 4.6);
@@ -212,6 +214,7 @@ export function createEnemies(deps) {
         this.health = this.maxHp;
         this.alive = true;
         this.fsm = 'PATRULHA';
+        if (this.mixer) this.mixer.timeScale = 1;
       },
     };
     e.respawn();
@@ -221,10 +224,36 @@ export function createEnemies(deps) {
   for (let i = 0; i < CFG.ENEMY_COUNT; i++) makeEnemy(i);
   for (const c of Structures.enemyCamps) makeEnemy(list.length, c); // torre + bases militares
 
+  /* ---- pele nova: GUARDIÃO mutante rigado (Guardiao.glb, anims Punch/Shoot/Walk).
+     Troca só o VISUAL: FSM, hitbox e balanceamento continuam idênticos.
+     Executivos (suit) mantêm o corpo procedural — são civis, não mutantes. */
+  if (Chars) Chars.character('/assets/models/Personagens/Guardiao.glb', { height: 1.92 })
+    .then(mold => {
+      for (const e of list) {
+        if (e.suit) continue;
+        const { root, mixer, actions, findNode } = mold.build();
+        // esconde o boneco procedural, mas mantém os grupos (o FSM anima
+        // parts.* e a lógica de mira/flash usa as âncoras)
+        e.group.traverse(o => { if (o.isMesh) o.visible = false; });
+        e.group.add(root);
+        e.hasModel = true;
+        e.mixer = mixer;
+        e.actions = actions;
+        if (actions.Walk) { actions.Walk.play(); actions.Walk.setEffectiveWeight(1); }
+        if (actions.Shoot) { actions.Shoot.setLoop(THREE.LoopOnce, 1); actions.Shoot.clampWhenFinished = false; }
+        if (actions.Punch) { actions.Punch.setLoop(THREE.LoopOnce, 1); }
+        const barrel = findNode('MuzzleFlash') || findNode('GunBarrel');
+        if (barrel && e.flash) { barrel.add(e.flash); e.flash.position.set(0, 0, 0); }
+        e.nextMelee = 0;
+      }
+    })
+    .catch(err => console.error('Guardião GLB falhou — inimigos seguem procedurais:', err));
+
   /* tiro do inimigo: hitscan com spread, tracer e chance de errar */
   const _eFrom = new THREE.Vector3(), _eTo = new THREE.Vector3(), _eDir = new THREE.Vector3();
   function enemyFire(e) {
     e.flashT = 0.06;
+    if (e.actions && e.actions.Shoot) e.actions.Shoot.reset().play();
     SFX.enemyShot();
     _eFrom.copy(e.group.position); _eFrom.y += 1.45;
     _eTo.copy(player.pos); _eTo.y += lerp(1.5, 0.95, player.crouchT);
@@ -382,23 +411,39 @@ export function createEnemies(deps) {
       e.flinchT = Math.max(0, e.flinchT - dt * 3.2);
       g.rotation.x = e.speedF * 0.14 - e.flinchT * 0.3;        // inclina pra frente ao correr, recua no flinch
       g.rotation.z = Math.sin(e.walkPhase) * 0.045 * e.speedF; // gingado lateral
-      e.parts.legL.rotation.x = swing;
-      e.parts.legR.rotation.x = -swing;
-      // cabeça vasculha no estado de alerta
-      if (e.fsm === 'ALERTA') e.parts.head.rotation.y = Math.sin(t * 2.2 + e.id * 1.7) * 0.7;
-      else e.parts.head.rotation.y = damp(e.parts.head.rotation.y, 0, 6, dt);
-      if (aiming) {
-        // as DUAS mãos seguram a arma apontada pro player
-        const dyAim = (player.pos.y + 1.4) - (g.position.y + 1.5);
-        const pitch = Math.atan2(dyAim, dPlayer);
-        const aimX = -Math.PI / 2 + clamp(-pitch, -0.6, 0.6);
-        e.parts.armR.rotation.x = damp(e.parts.armR.rotation.x, aimX, 10, dt);
-        e.parts.armL.rotation.x = damp(e.parts.armL.rotation.x, aimX + 0.14, 10, dt);
-        e.parts.armL.rotation.z = damp(e.parts.armL.rotation.z, 0.6, 10, dt);
+      if (e.hasModel) {
+        /* GUARDIÃO rigado: Walk embutida com passo no ritmo da velocidade;
+           Punch quando o player cola (dano corpo-a-corpo novo, justo e telegrafado) */
+        e.mixer.update(dt * (0.35 + e.speedF * 1.4));
+        if (e.actions.Walk) e.actions.Walk.setEffectiveWeight(0.25 + e.speedF * 0.75);
+        if (aiming && dPlayer < 2.7 && t >= (e.nextMelee || 0) && e.actions.Punch) {
+          e.nextMelee = t + 2.4;
+          e.actions.Punch.reset().play();
+          setTimeout(() => { // o soco conecta no meio da animação
+            if (e.alive && !player.dead && g.position.distanceTo(player.pos) < 3) {
+              playerDamage(9, g.position);
+            }
+          }, 380);
+        }
       } else {
-        e.parts.armR.rotation.x = swing * 0.8;
-        e.parts.armL.rotation.x = -swing * 0.8;
-        e.parts.armL.rotation.z = damp(e.parts.armL.rotation.z, 0, 8, dt);
+        e.parts.legL.rotation.x = swing;
+        e.parts.legR.rotation.x = -swing;
+        // cabeça vasculha no estado de alerta
+        if (e.fsm === 'ALERTA') e.parts.head.rotation.y = Math.sin(t * 2.2 + e.id * 1.7) * 0.7;
+        else e.parts.head.rotation.y = damp(e.parts.head.rotation.y, 0, 6, dt);
+        if (aiming) {
+          // as DUAS mãos seguram a arma apontada pro player
+          const dyAim = (player.pos.y + 1.4) - (g.position.y + 1.5);
+          const pitch = Math.atan2(dyAim, dPlayer);
+          const aimX = -Math.PI / 2 + clamp(-pitch, -0.6, 0.6);
+          e.parts.armR.rotation.x = damp(e.parts.armR.rotation.x, aimX, 10, dt);
+          e.parts.armL.rotation.x = damp(e.parts.armL.rotation.x, aimX + 0.14, 10, dt);
+          e.parts.armL.rotation.z = damp(e.parts.armL.rotation.z, 0.6, 10, dt);
+        } else {
+          e.parts.armR.rotation.x = swing * 0.8;
+          e.parts.armL.rotation.x = -swing * 0.8;
+          e.parts.armL.rotation.z = damp(e.parts.armL.rotation.z, 0, 8, dt);
+        }
       }
       g.position.y += Math.abs(Math.sin(e.walkPhase)) * 0.06 * e.speedF; // quica ao andar
 

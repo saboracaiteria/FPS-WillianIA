@@ -47,9 +47,14 @@ export function createSFX(deps) {
     init,
     resume() { if (ctx && ctx.state === 'suspended') ctx.resume(); },
     shot(kind) { // timbre por arma: estalo agudo + corpo + sub grave (punch)
-      if (kind === 'shotgun') { noise(0.4, 0.72, 3400, 95, 0.6); blip(84, 0.24, 'square', 0.2, -46); blip(46, 0.32, 'sine', 0.3, -14); }
-      else if (kind === 'dmr') { noise(0.22, 0.6, 6800, 170, 0.9); blip(175, 0.12, 'square', 0.14, -120); blip(52, 0.24, 'sine', 0.24, -18); setTimeout(() => noise(0.4, 0.12, 650, 80, 0.4), 70); }
-      else { noise(0.17, 0.55, 5600, 210, 0.8); blip(140, 0.09, 'square', 0.14, -85); blip(58, 0.18, 'sine', 0.22, -22); }
+      const v = rand(0.94, 1.06); // variação de pitch por disparo: rajada não vira metrônomo
+      if (kind === 'shotgun') { noise(0.4, 0.72, 3400 * v, 95, 0.6); blip(84 * v, 0.24, 'square', 0.2, -46); blip(46, 0.32, 'sine', 0.3, -14); }
+      else if (kind === 'dmr') { noise(0.22, 0.6, 6800 * v, 170, 0.9); blip(175 * v, 0.12, 'square', 0.14, -120); blip(52, 0.24, 'sine', 0.24, -18); setTimeout(() => noise(0.4, 0.12, 650, 80, 0.4), 70); }
+      else { noise(0.17, 0.55, 5600 * v, 210, 0.8); blip(140 * v, 0.09, 'square', 0.14, -85); blip(58, 0.18, 'sine', 0.22, -22); }
+    },
+    melee() { // facada: corte de ar + impacto seco
+      noise(0.09, 0.2, 2600, 700, 0.7);
+      setTimeout(() => { noise(0.06, 0.18, 900, 240, 1.2); blip(190, 0.05, 'square', 0.08, -60); }, 60);
     },
     chirp() { // passarinhos
       if (!ctx) return;

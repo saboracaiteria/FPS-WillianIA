@@ -294,6 +294,15 @@ const arsenal = [
   makeWeapon({ name: 'FACA "AURORA"', auto: false, rpm: 130, dmg: 34, pellets: 1, magSize: 1, reserveStart: 0,
     reloadTime: 0.8, spreadHip: 0, spreadAds: 0, recoilP: 0.3, recoilY: 0.06, kick: 0.07,
     adsFov: 66, hip: [0.3, -0.25, -0.48], ads: [0.16, -0.19, -0.4], melee: true, locked: true }, buildKnife),
+  // armas novas dos assets 3D: sniper leve (ferrolho rápido, dano menor) e
+  // escopeta de rajada (cadência alta, chumbo fraco) — visual vem do GLB;
+  // o modelo procedural (DMR/escopeta) fica só de fallback de rede
+  makeWeapon({ name: 'SNIPER "AGULHA"', auto: false, rpm: 235, dmg: 46, pellets: 1, magSize: 10, reserveStart: 40,
+    reloadTime: 1.6, spreadHip: 0.018, spreadAds: 0.0008, recoilP: 1.1, recoilY: 0.18, kick: 0.09,
+    adsFov: 30, hip: [0.25, -0.23, -0.42], ads: [0, -0.112, -0.22], locked: true }, buildDMR),
+  makeWeapon({ name: 'ESCOPETA "RAJADA"', auto: true, rpm: 175, dmg: 7, pellets: 7, magSize: 9, reserveStart: 36,
+    reloadTime: 2.1, spreadHip: 0.055, spreadAds: 0.04, recoilP: 1.3, recoilY: 0.24, kick: 0.11,
+    adsFov: 62, hip: [0.27, -0.24, -0.46], ads: [0, -0.075, -0.36], locked: true }, buildShotgun),
 ];
   return { wm, weaponRoot, weaponKick, arsenal, knuckleMat };
 }

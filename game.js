@@ -17,6 +17,10 @@ import { createStructures } from './js/structures.js';
 import { createFX } from './js/fx.js';
 import { createDmgNums } from './js/dmgnums.js';
 import { createWeapons } from './js/weapons.js';
+import { createWeaponModels } from './js/weaponmodels.js';
+import { createFpBody } from './js/fpbody.js';
+import { createCharModels } from './js/charmodels.js';
+import { createScenery } from './js/scenery.js';
 import { createCar } from './js/car.js';
 import { createHeli } from './js/heli.js';
 import { createGrenades } from './js/grenades.js';
@@ -334,23 +338,145 @@ const treeSpots = []; // posições das árvores (LOD + minimapa)
 /* re-balanceia LOD por distância (perto = detalhada, longe = barata) */
 const TREE_LOD_DIST = 70;
 const _dummy = new THREE.Object3D();
+let treeVariantMeshes = null; // [InstancedMesh] quando os GLBs chegam
 function rebucketTrees(px, pz) {
-  let hi = 0, lo = 0;
-  for (const t of treeSpots) {
-    _dummy.position.set(t.x, t.y - 0.15, t.z);
-    _dummy.rotation.set(0, t.rot, 0);
-    _dummy.scale.setScalar(t.s);
-    _dummy.updateMatrix();
-    const d = Math.hypot(t.x - px, t.z - pz);
-    if (d < TREE_LOD_DIST) { treeHiMesh.setColorAt(hi, _c.setHex(t.tint)); treeHiMesh.setMatrixAt(hi++, _dummy.matrix); }
-    else if (d < CFG.VIEW_DIST) { treeLoMesh.setColorAt(lo, _c.setHex(t.tint)); treeLoMesh.setMatrixAt(lo++, _dummy.matrix); }
+  let lo = 0;
+  if (treeVariantMeshes) {
+    const counts = treeVariantMeshes.map(() => 0);
+    for (const t of treeSpots) {
+      _dummy.position.set(t.x, t.y - 0.15, t.z);
+      _dummy.rotation.set(0, t.rot, 0);
+      _dummy.scale.setScalar(t.s);
+      _dummy.updateMatrix();
+      const d = Math.hypot(t.x - px, t.z - pz);
+      if (d < TREE_LOD_DIST) {
+        const m = treeVariantMeshes[t.variant || 0];
+        m.setColorAt(counts[t.variant || 0], _c.setHex(t.tint));
+        m.setMatrixAt(counts[t.variant || 0]++, _dummy.matrix);
+      } else if (d < CFG.VIEW_DIST) { treeLoMesh.setColorAt(lo, _c.setHex(t.tint)); treeLoMesh.setMatrixAt(lo++, _dummy.matrix); }
+    }
+    treeVariantMeshes.forEach((m, i) => {
+      m.count = counts[i];
+      m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    });
+  } else {
+    let hi = 0;
+    for (const t of treeSpots) {
+      _dummy.position.set(t.x, t.y - 0.15, t.z);
+      _dummy.rotation.set(0, t.rot, 0);
+      _dummy.scale.setScalar(t.s);
+      _dummy.updateMatrix();
+      const d = Math.hypot(t.x - px, t.z - pz);
+      if (d < TREE_LOD_DIST) { treeHiMesh.setColorAt(hi, _c.setHex(t.tint)); treeHiMesh.setMatrixAt(hi++, _dummy.matrix); }
+      else if (d < CFG.VIEW_DIST) { treeLoMesh.setColorAt(lo, _c.setHex(t.tint)); treeLoMesh.setMatrixAt(lo++, _dummy.matrix); }
+    }
+    treeHiMesh.count = hi;
+    treeHiMesh.instanceMatrix.needsUpdate = true;
+    if (treeHiMesh.instanceColor) treeHiMesh.instanceColor.needsUpdate = true;
   }
-  treeHiMesh.count = hi; treeLoMesh.count = lo;
-  treeHiMesh.instanceMatrix.needsUpdate = true;
+  treeLoMesh.count = lo;
   treeLoMesh.instanceMatrix.needsUpdate = true;
-  if (treeHiMesh.instanceColor) treeHiMesh.instanceColor.needsUpdate = true;
   if (treeLoMesh.instanceColor) treeLoMesh.instanceColor.needsUpdate = true;
 }
+
+/* ---- cenário 3D dos assets: árvores reais instanciadas + pontos de interesse ---- */
+const Scenery = createScenery();
+(async () => {
+  try {
+    // três famílias de árvore (a "assets" é um bosquete inteiro por instância)
+    const geos = await Promise.all([
+      Scenery.bakedGeometry('/assets/models/Cenários/giant_low_poly_tree.glb', { height: 12 }),
+      Scenery.bakedGeometry('/assets/models/Cenários/low_poly_tree_with_twisting_branches.glb', { height: 8.5 }),
+      Scenery.bakedGeometry('/assets/models/Cenários/low_poly__tree_assets.glb', { height: 7 }),
+      Scenery.bakedGeometry('/assets/models/Cenários/low_poly_tree_log_and_stump.glb', { height: 1.3 }),
+    ]);
+    treeVariantMeshes = geos.map(g => {
+      const m = new THREE.InstancedMesh(g, treeMat, CFG.TREE_COUNT);
+      m.castShadow = m.receiveShadow = true;
+      m.frustumCulled = false;
+      scene.add(m);
+      return m;
+    });
+    treeHiMesh.count = 0;
+    treeHiMesh.visible = false;
+    for (let i = 0; i < treeSpots.length; i++) {
+      const t = treeSpots[i];
+      const bio = biomeAt(t.x, t.z);
+      // campo: retorcidas; floresta: bosquetes densos; 8% tocos;
+      // a "giant tree" é uma ILHA FLUTUANTE com bonsai — vira marco raro (1/40)
+      t.variant = (i % 40 === 0 && bio > 0.3) ? 0
+        : (i % 12 === 0) ? 3
+          : bio > 0.34 ? (i % 2 ? 1 : 2) : (i % 3 === 0 ? 2 : 1);
+      if (t.variant === 3) t.s = rand(0.8, 1.2); // toco não vira arbusto gigante
+      if (t.variant === 0) t.s = rand(1.2, 1.6); // ilha flutuante imponente
+    }
+    rebucketTrees(player.pos.x, player.pos.z);
+  } catch (err) { console.error('Árvores GLB falharam — mantendo procedurais:', err); }
+})();
+
+/* pontos de interesse novos: MERCADO na beira da cidade, REFÚGIO NA ÁRVORE na
+   floresta e barris espalhados — com colisão (player + veículos) e, por serem
+   sites, os baús do Battle Royale nascem neles automaticamente */
+(async () => {
+  const placeProp = (p, x, z, ry) => {
+    p.root.position.set(x, heightAt(x, z), z);
+    p.root.rotation.y = ry || 0;
+    scene.add(p.root);
+    const hx = p.size.x / 2 * 0.72, hy = p.size.y / 2, hz = p.size.z / 2 * 0.72;
+    const body = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3(hx, hy, hz)) });
+    body.position.set(x, heightAt(x, z) + hy, z);
+    body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), ry || 0);
+    body.updateAABB();
+    world.addBody(body);
+    addObstacle(x, z, Math.max(hx, hz) * 0.9); // player não atravessa
+  };
+  try {
+    const cidade = Structures.sites.find(s => s.type === 'cidade');
+    const mx = cidade ? cidade.x + cidade.r + 16 : 60, mz = cidade ? cidade.z - 18 : 60;
+    const mercado = await Scenery.prop('/assets/models/Cenários/mercado.glb', { height: 7 });
+    placeProp(mercado, mx, mz, 0.4);
+    Structures.sites.push({ x: mx, z: mz, r: Math.max(mercado.size.x, mercado.size.z) / 2 + 3, type: 'mercado' });
+
+    // refúgio na árvore: primeiro canto de floresta plano que achar
+    let tx = 0, tz = 0;
+    for (let i = 0; i < 300; i++) {
+      const a = rand(TAU), r = rand(150, 420);
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      if (biomeAt(x, z) > 0.4 && slopeAt(x, z) < 0.3 && heightAt(x, z) > WATER_LEVEL + 1.5 &&
+          !Structures.sites.some(s => Math.hypot(x - s.x, z - s.z) < s.r + 20)) { tx = x; tz = z; break; }
+    }
+    if (tx || tz) {
+      const casa = await Scenery.prop('/assets/models/Cenários/low_poly_tree_house.glb', { height: 13 });
+      placeProp(casa, tx, tz, rand(TAU));
+      Structures.sites.push({ x: tx, z: tz, r: Math.max(casa.size.x, casa.size.z) / 2 + 3, type: 'refúgio' });
+    }
+
+    // barris de madeira: cobertura leve perto dos POIs novos
+    const barril = await Scenery.prop('/assets/models/Cenários/wooden_barrel.glb', { height: 1.05 });
+    const spots = [[mx + 5, mz + 4], [mx - 6, mz + 2], [mx + 3, mz - 6],
+      [tx + 4, tz + 2], [tx - 3, tz - 4], [tx + 2, tz - 5]];
+    for (const [bx, bz] of spots) {
+      if (!bx && !bz) continue;
+      const b = barril.root.clone(true);
+      b.position.set(bx, heightAt(bx, bz), bz);
+      b.rotation.y = rand(TAU);
+      scene.add(b);
+      addObstacle(bx, bz, 0.55);
+    }
+    // tira árvores que nasceram dentro dos POIs novos e refaz o LOD
+    for (let i = treeSpots.length - 1; i >= 0; i--) {
+      const t = treeSpots[i];
+      for (const s of Structures.sites) {
+        if ((s.type === 'mercado' || s.type === 'refúgio') && Math.hypot(t.x - s.x, t.z - s.z) < s.r + 2) {
+          treeSpots.splice(i, 1);
+          break;
+        }
+      }
+    }
+    rebucketTrees(player.pos.x, player.pos.z);
+  } catch (err) { console.error('POIs GLB falharam — mundo segue como era:', err); }
+})();
 
 /* pedras: icosaedro deformado, flat shading estilizado */
 {
@@ -663,6 +789,11 @@ const player = {
 const WALK_SPEED = 5.2, RUN_SPEED = 8.6, CROUCH_SPEED = 2.6, ADS_SPEED = 3.4;
 const GRAVITY = 22, JUMP_VEL = 8.4;
 
+/* modelos 3D reais: armas GLB nas mãos + corpo rigado em primeira pessoa
+   (as âncoras procedurais viram alvos de IK — coreografia de recarga intacta) */
+const WeaponModels = createWeaponModels({ arsenal });
+const FpBody = createFpBody({ camera, player, state, getGun: () => gun, weaponRoot, arsenal });
+
 let fovCur = 75;
 let adsT = 0;          // 0 = hip, 1 = mirando
 let sprintT = 0;
@@ -879,7 +1010,9 @@ function applyFpsCamera(dt, t) {
   const ads = adsT * adsT * (3 - 2 * adsT); // smoothstep
   const lower = 1 - switchAnim;
   const sprintPose = sprintT * (1 - ads) * (gun.reloading ? 0.25 : 1);
-  weaponRoot.position.lerpVectors(gun.hipV, gun.adsV, ads);
+  // hip um tico mais alto/perto: as MÃOS do rig entram no quadro (ADS intacto)
+  _v3.copy(gun.hipV); _v3.y += 0.05; _v3.z += 0.06;
+  weaponRoot.position.lerpVectors(_v3, gun.adsV, ads);
   weaponRoot.position.x += (bobX * 0.55 + swayPos.x) * bobScale - sprintPose * 0.055;
   weaponRoot.position.y += (bobY + swayPos.y) * bobScale + Math.sin(t * 1.7) * 0.0035 * (1 - adsT)
                          - lower * 0.3 - sprintPose * 0.02;
@@ -965,6 +1098,10 @@ function applyFpsCamera(dt, t) {
   weaponKick.position.y = -slap * 0.03;
   weaponKick.rotation.x = recoil.kickRot + slap * 0.07;
   weaponRoot.visible = !state.driving && !state.flying && scopedK < 0.85; // na luneta, vê só o retículo
+
+  // modelos GLB: animações embutidas da arma + corpo/braços rigados (IK)
+  WeaponModels.update(dt);
+  FpBody.update(dt, t);
 
   // ---- flash do cano ----
   muzzleT = Math.max(0, muzzleT - dt);
@@ -1082,7 +1219,7 @@ function fire(t) {
     gun.cycleT = 0.34;
     addTrauma(0.06);
     recoil.kickZ += 0.12; recoil.kickRot += 0.1;
-    SFX.switchW();
+    SFX.melee();
     camera.getWorldPosition(_rayOrig);
     camera.getWorldDirection(_rayDir);
     if (window.__BR_melee) window.__BR_melee(_rayOrig, _rayDir, gun.dmg);
@@ -1409,7 +1546,8 @@ function carCameraUpdate(dt) {
 const lastShotInfo = { pos: new THREE.Vector3(), t: -99 };
 function setTimeScale(v) { timeScale = v; }
 const Pickups = createPickups({ heightAt, SFX, scene, Structures, showBanner, centerMsg, getGun: () => gun, updateAmmoHUD, updateInvHUD, updateArmorHUD, player, inventory }); // criado antes: Enemies dropa loot
-const Enemies = createEnemies({ CFG, clamp, lerp, damp, rand, TAU, _v1, _v2, _v3, heightAt, slopeAt, terrainNormal, WATER_LEVEL, obstaclesNear, SFX, FX, scene, csmMat, Structures, addScore, addKillFeed, player, playerDamage, addTrauma, Car, Pickups, knuckleMat, lastShotInfo });
+const Chars = createCharModels();
+const Enemies = createEnemies({ CFG, clamp, lerp, damp, rand, TAU, _v1, _v2, _v3, heightAt, slopeAt, terrainNormal, WATER_LEVEL, obstaclesNear, SFX, FX, scene, csmMat, Structures, addScore, addKillFeed, player, playerDamage, addTrauma, Car, Pickups, knuckleMat, lastShotInfo, Chars });
 
 /* registro do último tiro do player (os inimigos "ouvem") */
 /* alvos extras (animais, zumbis, fantasmas) e lista de bosses */
@@ -1450,7 +1588,7 @@ const Night = createNight({ rand, TAU, heightAt, WATER_LEVEL, SFX, scene, csmMat
 /* ================================================================
    BOSS 2 — O VISITANTE (alien na cratera do deserto) -> arma PLASMA
    ================================================================ */
-const Alien = createAlien({ rand, TAU, _v1, _v2, heightAt, biomeAt, WATER_LEVEL, CITY, SFX, FX, scene, csmMat, addScore, addKillFeed, showBanner, unlockWeapon, state, player, playerDamage, Bosses, Pickups, MFlags, setTimeScale });
+const Alien = createAlien({ rand, TAU, _v1, _v2, heightAt, biomeAt, WATER_LEVEL, CITY, SFX, FX, scene, csmMat, addScore, addKillFeed, showBanner, unlockWeapon, state, player, playerDamage, Bosses, Pickups, MFlags, setTimeScale, Chars });
 
 /* ================================================================
    MISSÕES — cadeia com recompensas
@@ -1772,6 +1910,7 @@ window.addEventListener('error', e => __errors.push(String(e.message)));
 window.__game = {
   state, player, Car, Heli, Enemies, arsenal, Boss, Alien, Bosses, Grenades, Rockets, Pickups, Structures, Grass,
   inventory, keys, mouse, camera, Env, Missions, Interact, Animals, Night, MFlags,
+  WeaponModels, FpBody,
   switchWeapon, unlockWeapon, startGame, tryToggleCar,
   get gun() { return gun; },
   get fps() { return fpsVal; },

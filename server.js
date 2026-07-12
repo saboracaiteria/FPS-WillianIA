@@ -178,9 +178,11 @@ function buildPlan(seed) {
 }
 
 /* loot dos baús — rolado no servidor (anti-trapaça leve) */
-const WEAPON_TIERS = [ // idx do arsenal no jogo: 1=escopeta 0=fuzil 2=DMR 3=bazuca 4=plasma
+const WEAPON_TIERS = [ // idx do arsenal: 1=escopeta 0=fuzil 2=DMR 3=bazuca 4=plasma 6=sniper leve 7=escopeta rajada
   { rarity: 'incomum',  weapon: 1, ammo: 18 },
+  { rarity: 'incomum',  weapon: 7, ammo: 27 },
   { rarity: 'raro',     weapon: 0, ammo: 90 },
+  { rarity: 'raro',     weapon: 6, ammo: 30 },
   { rarity: 'épico',    weapon: 2, ammo: 24 },
   { rarity: 'lendário', weapon: 3, ammo: 3 },
 ];
@@ -188,10 +190,10 @@ function rollChest(rng, luck = 0) {
   const items = [];
   const r = rng() + luck;
   if (r < 0.38) items.push({ type: 'ammo', amount: 40 + Math.floor(rng() * 50) });
-  else if (r < 0.62) items.push({ type: 'weapon', ...WEAPON_TIERS[0] });
-  else if (r < 0.82) items.push({ type: 'weapon', ...WEAPON_TIERS[1] });
-  else if (r < 0.94) items.push({ type: 'weapon', ...WEAPON_TIERS[2] });
-  else items.push({ type: 'weapon', ...WEAPON_TIERS[3] });
+  else if (r < 0.62) items.push({ type: 'weapon', ...WEAPON_TIERS[rng() < 0.5 ? 0 : 1] }); // incomum: escopeta clássica ou rajada
+  else if (r < 0.82) items.push({ type: 'weapon', ...WEAPON_TIERS[rng() < 0.55 ? 2 : 3] }); // raro: fuzil ou sniper leve
+  else if (r < 0.94) items.push({ type: 'weapon', ...WEAPON_TIERS[4] });
+  else items.push({ type: 'weapon', ...WEAPON_TIERS[5] });
   if (rng() < 0.55) items.push({ type: 'med' });
   if (rng() < 0.3) items.push({ type: 'armor', amount: 50 });
   if (rng() < 0.22) items.push({ type: 'ammo', amount: 24 });
