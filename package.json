@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test --test-concurrency=1 test/",
+    "test": "node --test --test-concurrency=1 \"test/*.test.js\"",
     "stress": "node scripts/stress.js",
     "test:e2e": "python3 tests/city-destruction-e2e.py",
     "lint": "eslint server.js game.js js/ multiplayer-client.js br-game.js city-destruction-protocol.js city-destruction-client.js scripts/ test/ eslint.config.js"
@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@gltf-transform/cli": "^4.4.1",
     "eslint": "^10.7.0",
     "globals": "^17.7.0",
     "puppeteer-core": "^24.43.1",

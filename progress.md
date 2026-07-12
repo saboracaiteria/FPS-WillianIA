@@ -46,3 +46,91 @@ Original prompt: eu adicionei uns projetos em 3d. local uns carros, quero substi
 ## Pendências
 
 - Nenhuma pendência funcional conhecida para esta solicitação.
+
+---
+
+# Atualização: assets 3D completos (armas, corpo FP, monstros, cenário)
+
+Prompt original: integrar a pasta assets/models/ reorganizada (Armas/, Cenários/,
+Personagens/, Veículos/) — trocar personagem principal (mãos rigadas em 1ª pessoa),
+monstros, armas e cenário; conferir as melhorias pendentes; publicar no GitHub.
+
+## Correções antes de tudo
+
+- Carros estavam QUEBRADOS: a reorganização em subpastas invalidou os caminhos de
+  js/car.js. Corrigidos código + teste; o servidor agora serve assets/models/
+  inteiro via express.static restrito (a whitelist manual não escalava pra ~25
+  arquivos novos).
+- harness de teste acha o Chrome no Windows — a suíte inteira (inclusive
+  Chrome/WebGL) roda agora na máquina do Willian igual rodava no cloud.
+
+## Ciclo concluído: armas GLB em primeira pessoa (js/weaponmodels.js)
+
+- 7 modelos integrados no padrão do car.js (cache, normalização por bounding box,
+  fallback procedural): M4→FUZIL, shotgun pesada→TROVÃO, sniper pesada→DMR,
+  bazooka(otimizada 9,2MB→0,8MB)→BAZUCA, arma do alien→PLASMA, e DUAS ARMAS NOVAS:
+  SNIPER "AGULHA" (idx 6) e ESCOPETA "RAJADA" (idx 7), com loot/teclas 7-8/balística.
+- Auto-orientação: o eixo mais comprido do modelo deita em Z; muzzleAnchor
+  reposicionado pra ponta real (flash/tracer saem do cano do GLB).
+- A AGULHA usa as animações EMBUTIDAS do GLB ("reload"/"bolt_slide") encaixadas na
+  duração real de recarga/ciclo, e os nós mag_4/bolt_6 do modelo foram religados
+  nas âncoras parts.mag/parts.bolt — a coreografia de recarga existente move
+  geometria real do modelo.
+
+## Ciclo concluído: corpo rigado em primeira pessoa (js/fpbody.js)
+
+- O helldiver (51 ossos, dedos individuais) fica pendurado na câmera, ancorado por
+  bounding box (pescoço no olho, cabeça escondida via scale 0 do osso).
+- IK analítico de 2 ossos por braço mirando as MESMAS âncoras (gun.parts.handR/L)
+  que a coreografia de recarga já anima — pente saindo, tapa, bombeada e sway
+  continuam com o timing original, agora com braços e dedos de verdade.
+- Punho por alinhamento geométrico: o eixo real dos dedos (medido do rig) alinha
+  com a direção da empunhadura + uma rolagem calibrável por mão. Dedos com presets
+  por arma (indicador no gatilho, pegada de bomba, faca) e afrouxam na recarga.
+- Pernas caminham no ritmo da velocidade (visíveis ao olhar pra baixo), capa
+  balança, respiração no peito. Na queda/paraquedas a arma some (mãos nas alças).
+- Descobertas do caminho: GLTFLoader remove pontos dos nomes de ossos
+  ("Arm_1.L"→"Arm_1L"); braços do modelo são curtos (escala 1.18 pra alcançar o
+  grip); waitForFunction do puppeteer usa polling por rAF — com rAF congelado pra
+  screenshot determinístico é preciso polling por intervalo.
+
+## Ciclo concluído: monstros rigados (js/charmodels.js)
+
+- Guardiao.glb (Punch/Shoot/Walk embutidas) substituiu o corpo procedural dos
+  soldados (clone de esqueleto por instância): Walk com peso pela velocidade,
+  Shoot a cada rajada, e SOCO novo quando o player cola (9 de dano, telegrafado,
+  cooldown 2,4s). Flash religado no nó MuzzleFlash do próprio rig. Executivos
+  (suit) continuam procedurais — são civis. FSM/hitbox/balanceamento intactos.
+- Alien otimizado (5,5MB→1,2MB, rig+Take 001 preservados) substituiu o corpo do
+  VISITANTE, com a animação embutida em loop. Morte/blink/orbes intactos.
+
+## Ciclo concluído: cenário (js/scenery.js)
+
+- Árvores GLB "assadas" em geometria única com vertex colors → continuam
+  instanciadas (1 draw call por variante). Variantes: retorcida, bosquete de
+  pinheiros, tocos (8%), e a "giant tree" — que na verdade é uma ILHA FLUTUANTE
+  com bonsai — virou marco raro (1/40, só em floresta).
+- Materiais texturizados (cor-base branca) recebem paleta de fallback no bake —
+  sem isso os pinheiros saíam fantasmas.
+- POIs novos com colisão (player+veículos) e baús automáticos do BR: MERCADO na
+  beira da cidade, REFÚGIO NA ÁRVORE na floresta, barris espalhados.
+
+## Melhorias da lista do Willian (auditoria)
+
+- Já resolvidas em ciclos anteriores: ping no HUD, música/vento removidos, drop de
+  munição ao matar, carro visível pros outros, save removido, dia 3x mais longo
+  que a noite, salto automático da nave, opções de gráficos/áudio, código de
+  anfitrião, cabine interna do OVNI.
+- NOVO watchdog de aba oculta: quem alt-tabava na queda ficava pendurado no ar,
+  imortal fora da zona, e a partida não terminava — agora um setInterval (roda em
+  segundo plano) faz a queda grosseira e aplica o dano do gás quando o rAF morre.
+- SFX: variação de pitch por disparo (rajada não vira metrônomo) e som próprio de
+  facada (SFX.melee) no lugar do som de troca de arma.
+
+## Verificação
+
+- npm run lint: 0 erros. Suíte completa + test/asset-models.test.js novo (GLBs
+  válidos com rig/animações + integração viva no Chrome).
+- Playtest visual: output/fp/ (armas nas mãos, recarga, ADS, corpo em 3ª pessoa)
+  e output/world/ (Guardião, Visitante, floresta nova, mercado, refúgio) — todos
+  capturados sem erros de console.
