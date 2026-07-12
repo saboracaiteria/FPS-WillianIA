@@ -537,6 +537,37 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
     assert.ok(r.soltou, 'lobby apareceu sem soltar o pointer lock (jogador preso)');
   });
 
+  it('dada a cidade (asfalto), então a grama não brota lá dentro — e segue normal do lado de fora', async t => {
+    const r = await play(() => {
+      const G = window.QA.G, MP = window.QA.MP, THREE = MP.THREE;
+      const CITY = { x: -340, z: 130 };
+      // teleporta pra cidade: o streaming preenche os chunks locais de grama
+      // na BORDA da cidade: a grade de grama (raio ~70m) cobre os dois lados
+      // da fronteira urbana — dá pra medir dentro E fora no mesmo streaming
+      window.QA.reset(CITY.x + 90, CITY.z);
+      // streaming reconstrói poucos chunks por frame: esgota a fila
+      for (let i = 0; i < 150; i++) G.Grass.update(MP.player.pos, MP.player.pos, 1);
+      const m4 = new THREE.Matrix4(), pos = new THREE.Vector3(),
+        q = new THREE.Quaternion(), sc = new THREE.Vector3();
+      let dentroAltas = 0, dentroTotal = 0, foraAltas = 0, foraTotal = 0;
+      MP.scene.traverse(o => {
+        if (!o.isInstancedMesh || !o.geometry.attributes.aPhase) return; // só chunks de grama
+        for (let i = 0; i < o.count; i++) {
+          o.getMatrixAt(i, m4);
+          m4.decompose(pos, q, sc);
+          const wx = o.position.x + pos.x, wz = o.position.z + pos.z;
+          const d = Math.hypot(wx - CITY.x, wz - CITY.z);
+          if (d < 80) { dentroTotal++; if (sc.y > 0.1) dentroAltas++; }
+          else if (d > 95 && d < 130) { foraTotal++; if (sc.y > 0.1) foraAltas++; }
+        }
+      });
+      return { dentroAltas, dentroTotal, foraAltas, foraTotal };
+    });
+    assert.ok(r.dentroTotal > 50, `amostra pequena na cidade (${r.dentroTotal})`);
+    assert.equal(r.dentroAltas, 0, `${r.dentroAltas}/${r.dentroTotal} lâminas de grama dentro da cidade`);
+    assert.ok(r.foraAltas > 5, `grama de fora sumiu junto (${r.foraAltas}/${r.foraTotal})`);
+  });
+
   it('rede de segurança: nenhum erro de runtime acumulado durante toda a suite', async t => {
     const errs = await play(() => window.__game.errors.map(e => String(e && e.message || e)));
     assert.deepEqual(errs, [], `erros: ${errs.join(' | ')}`);

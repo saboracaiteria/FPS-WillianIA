@@ -236,7 +236,7 @@ const Water = createWater({ CFG, WATER_LEVEL, scene, sunDir });
    GRAMA REATIVA — InstancedMesh em chunks que acompanham o player.
    Vento no vertex shader + dobra quando player/carro passam.
    ================================================================ */
-const Grass = createGrass({ CFG, rand, TAU, heightAt, biomeAt, WATER_LEVEL, simplex, scene, sunDir });
+const Grass = createGrass({ CFG, rand, TAU, heightAt, biomeAt, WATER_LEVEL, simplex, scene, sunDir, CITY });
 
 /* ================================================================
    VEGETAÇÃO — árvores (2 LODs), pedras e flores, tudo InstancedMesh
@@ -1770,7 +1770,7 @@ window.addEventListener('resize', () => {
 const __errors = [];
 window.addEventListener('error', e => __errors.push(String(e.message)));
 window.__game = {
-  state, player, Car, Heli, Enemies, arsenal, Boss, Alien, Bosses, Grenades, Rockets, Pickups, Structures,
+  state, player, Car, Heli, Enemies, arsenal, Boss, Alien, Bosses, Grenades, Rockets, Pickups, Structures, Grass,
   inventory, keys, mouse, camera, Env, Missions, Interact, Animals, Night, MFlags,
   switchWeapon, unlockWeapon, startGame, tryToggleCar,
   get gun() { return gun; },

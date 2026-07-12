@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 
 export function createGrass(deps) {
-  const { CFG, rand, TAU, heightAt, biomeAt, WATER_LEVEL, simplex, scene, sunDir } = deps;
+  const { CFG, rand, TAU, heightAt, biomeAt, WATER_LEVEL, simplex, scene, sunDir, CITY } = deps;
   const N = CFG.GRASS_CHUNKS;                       // grade NxN
   const SIZE = CFG.GRASS_CHUNK_SIZE;
   const PER_CHUNK = Math.floor(CFG.GRASS_TOTAL / (N * N));
@@ -159,6 +159,9 @@ export function createGrass(deps) {
       // deserto: quase sem grama (lâminas colapsam) e mais baixa nas bordas
       if (desert > 0.05) s *= Math.random() < desert * 0.85 ? 0.02 : (1 - desert * 0.45);
       if (y < WATER_LEVEL + 0.25) s = 0.015; // nada de grama dentro dos lagos
+      // distrito urbano é asfalto: grama não brota no perímetro da cidade
+      // (escala ~zero: até lâmina de 1,5cm pontilhava verde no chão claro)
+      if (CITY && Math.hypot(wx + lx - CITY.x, wz + lz - CITY.z) < 92) s = 0.0001;
       dummy.scale.set(rand(0.8, 1.25), s, 1);
       dummy.updateMatrix();
       chunk.mesh.setMatrixAt(i, dummy.matrix);

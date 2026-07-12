@@ -235,14 +235,17 @@ export function createCar(deps) {
         v.wheelMeshes[i].quaternion.copy(wt.quaternion);
       }
       /* altura real: o offset teórico ignorava o curso da suspensão e o
-         modelo afundava ~0,5m. Com o chassi em repouso (suspensão assentada,
-         inclusive dormindo), alinha o fundo do modelo ao terreno — uma vez. */
+         modelo afundava ~0,5m. Referência = RODAS físicas (não o terreno:
+         na rua da cidade o asfalto fica acima do heightAt e o modelo
+         afundava no slab). Roda uma vez, com o chassi em repouso. */
       if (v.modelAlignPending && v.chassisBody.velocity.lengthSquared() < 0.04) {
         v.modelAlignPending = false;
         v.group.updateMatrixWorld(true);
-        const solo = heightAt(v.group.position.x, v.group.position.z);
+        let wy = 0;
+        for (const w of v.vehicle.wheelInfos) wy += w.worldTransform.position.y;
+        const chao = wy / 4 - v.cfg.wheelR; // fundo dos pneus = chão real da física
         const box = new THREE.Box3().setFromObject(v.modelRoot);
-        v.modelRoot.position.y += (solo + 0.04 - box.min.y);
+        v.modelRoot.position.y += (chao + 0.04 - box.min.y);
         v.modelRoot.updateMatrixWorld(true);
       }
     }
