@@ -1784,6 +1784,32 @@ window.__game = {
   },
 };
 
+/* Hooks pequenos para playtest automatizado e acessibilidade por estado textual. */
+window.advanceTime = ms => {
+  const steps = Math.max(1, Math.round(Math.max(0, Number(ms) || 0) / (1000 / 60)));
+  for (let i = 0; i < steps; i++) tick(1 / 60);
+};
+window.render_game_to_text = () => {
+  const br = window.__BR_debug;
+  const visibleCrates = br ? br.crates.filter(c => !c.opened)
+    .sort((a, b) => Math.hypot(player.pos.x - a.x, player.pos.z - a.z) - Math.hypot(player.pos.x - b.x, player.pos.z - b.z))
+    .slice(0, 8).map(c => ({ key: c.key, x: +c.x.toFixed(1), z: +c.z.toFixed(1) })) : [];
+  return JSON.stringify({
+    coordinates: 'origin=center; +x=east; +y=up; +z=south',
+    mode: window.__BR_active ? (br ? br.S.phase : 'BR_LOADING') : (state.started ? (state.paused ? 'PAUSED' : 'SOLO') : 'MENU'),
+    player: {
+      x: +player.pos.x.toFixed(2), y: +player.pos.y.toFixed(2), z: +player.pos.z.toFixed(2),
+      health: +player.health.toFixed(1), armor: +player.armor.toFixed(1), dead: player.dead,
+      driving: state.driving, flying: state.flying,
+    },
+    vehicles: Car.vehicles.map((v, i) => ({
+      id: i, type: v.cfg.name, model: v.modelStatus,
+      x: +v.group.position.x.toFixed(1), y: +v.group.position.y.toFixed(1), z: +v.group.position.z.toFixed(1),
+    })),
+    unopenedCrates: visibleCrates,
+  });
+};
+
 /* MULTIPLAYER: referências pro multiplayer-client.js (aditivo) */
 window.__MP = {
   THREE, scene, camera, renderer, composer, player, state, CFG,

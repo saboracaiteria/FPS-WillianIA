@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/",
+    "test": "node --test --test-concurrency=1 test/",
     "stress": "node scripts/stress.js",
     "test:e2e": "python3 tests/city-destruction-e2e.py",
     "lint": "eslint server.js game.js js/ multiplayer-client.js br-game.js city-destruction-protocol.js city-destruction-client.js scripts/ test/ eslint.config.js"

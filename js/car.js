@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export function createCar(deps) {
   const { damp, rand, _v1, _v2, heightAt, SFX, FX, scene, world, csmMat, Structures, ui, state, keys } = deps;
   const DRIVE_SIGN = 1; // sinal do engineForce p/ andar pra frente (validado em teste)
   const _cv1 = new CANNON.Vec3();
+  const modelLoader = new GLTFLoader();
+  const modelCache = new Map();
   /* ---- fábrica de veículos (RaycastVehicle) ---- */
   function createPhysics(cfg, x, z) {
     const chassisBody = new CANNON.Body({
@@ -43,158 +45,157 @@ export function createCar(deps) {
     return { chassisBody, vehicle };
   }
 
-  /* ---- modelos ---- */
-  const darkM = csmMat(new THREE.MeshStandardMaterial({ color: 0x22252b, metalness: 0.4, roughness: 0.6 }));
-  const chrome = csmMat(new THREE.MeshStandardMaterial({ color: 0xb9c2cc, metalness: 0.9, roughness: 0.2 }));
-  const glass = new THREE.MeshStandardMaterial({ color: 0xa8d8f0, metalness: 0.85, roughness: 0.08, transparent: true, opacity: 0.6 });
-  const lightOnG = new THREE.MeshStandardMaterial({ color: 0xfff6cc, emissive: 0xffeeaa, emissiveIntensity: 2.6 });
-  const lightRedG = new THREE.MeshStandardMaterial({ color: 0x550000, emissive: 0xff2211, emissiveIntensity: 2.4 });
-  function makeWheels(r, w2, n = 4) {
-    const tireGeo = new THREE.CylinderGeometry(r, r, w2, 16); tireGeo.rotateX(Math.PI / 2);
-    const hubGeo = new THREE.CylinderGeometry(r * 0.6, r * 0.6, w2 + 0.02, 9); hubGeo.rotateX(Math.PI / 2);
-    const tireMat = csmMat(new THREE.MeshStandardMaterial({ color: 0x17181c, roughness: 0.9 }));
-    const hubMat = csmMat(new THREE.MeshStandardMaterial({ color: 0xd9c06a, metalness: 0.7, roughness: 0.3 }));
+  /* Proxies sem geometria: preservam suspensão/poeira sem duplicar as rodas dos GLBs. */
+  function makeWheelProxies(n = 4) {
     const ws = [];
     for (let i = 0; i < n; i++) {
-      const w = new THREE.Group();
-      const tire = new THREE.Mesh(tireGeo, tireMat); tire.castShadow = true;
-      w.add(tire, new THREE.Mesh(hubGeo, hubMat));
+      const w = new THREE.Object3D();
       scene.add(w);
       ws.push(w);
     }
     return ws;
   }
-  /* buggy (frente = +X): RoundedBox + arcos de para-lama */
-  function buildBuggyModel(colorHex) {
-  const group = new THREE.Group();
-  const paint = csmMat(new THREE.MeshStandardMaterial({ color: colorHex, metalness: 0.55, roughness: 0.25 }));
-  function part(geo, mat, x, y, z, o = {}) {
-    const m = new THREE.Mesh(geo, mat);
-    m.position.set(x, y, z);
-    m.rotation.set(o.rx || 0, o.ry || 0, o.rz || 0);
-    m.castShadow = true;
-    group.add(m); return m;
-  }
-  part(new RoundedBoxGeometry(3.85, 0.78, 1.8, 3, 0.24), paint, 0, 0.16, 0);             // monobloco
-  part(new RoundedBoxGeometry(1.25, 0.5, 1.6, 3, 0.18), paint, 1.32, 0.42, 0, { rz: -0.09 }); // capô caído
-  part(new RoundedBoxGeometry(1.85, 0.74, 1.56, 3, 0.3), paint, -0.32, 0.82, 0);         // cabine
-  part(new RoundedBoxGeometry(0.07, 0.56, 1.34, 2, 0.03), glass, 0.62, 0.78, 0, { rz: -0.45 }); // para-brisa
-  part(new RoundedBoxGeometry(0.06, 0.46, 1.28, 2, 0.03), glass, -1.22, 0.82, 0, { rz: 0.35 }); // vidro traseiro
-  part(new RoundedBoxGeometry(1.1, 0.36, 0.05, 2, 0.02), glass, -0.32, 0.86, 0.79);      // janelas laterais
-  part(new RoundedBoxGeometry(1.1, 0.36, 0.05, 2, 0.02), glass, -0.32, 0.86, -0.79);
-  part(new RoundedBoxGeometry(0.55, 0.32, 1.92, 2, 0.13), darkM, 1.9, -0.08, 0);         // para-choque diant.
-  part(new RoundedBoxGeometry(0.45, 0.32, 1.92, 2, 0.13), darkM, -1.9, -0.08, 0);        // para-choque tras.
-  part(new RoundedBoxGeometry(0.09, 0.2, 0.95, 2, 0.04), darkM, 2.05, 0.16, 0);          // grade
-  part(new RoundedBoxGeometry(1.5, 0.16, 0.16, 2, 0.06), darkM, 0, -0.22, 0.92);         // saia lateral
-  part(new RoundedBoxGeometry(1.5, 0.16, 0.16, 2, 0.06), darkM, 0, -0.22, -0.92);
-  // para-lamas: arcos de toro sobre cada roda
-  const archGeo = new THREE.TorusGeometry(0.6, 0.14, 8, 16, Math.PI);
-  for (const [wx, wz] of [[1.28, 0.86], [1.28, -0.86], [-1.28, 0.86], [-1.28, -0.86]])
-    part(archGeo, paint, wx, -0.12, wz);
-  // santantônio (roll bar) atrás da cabine
-  part(new THREE.TorusGeometry(0.78, 0.07, 8, 14, Math.PI), chrome, -1.32, 0.55, 0, { ry: Math.PI / 2 });
-  // aerofólio + suportes
-  part(new RoundedBoxGeometry(0.5, 0.07, 1.7, 2, 0.03), paint, -1.8, 1.06, 0, { rz: 0.12 });
-  part(new RoundedBoxGeometry(0.1, 0.3, 0.1, 1, 0.03), darkM, -1.78, 0.85, 0.6);
-  part(new RoundedBoxGeometry(0.1, 0.3, 0.1, 1, 0.03), darkM, -1.78, 0.85, -0.6);
-  // espelhos retrovisores
-  part(new RoundedBoxGeometry(0.1, 0.12, 0.22, 1, 0.04), darkM, 0.62, 1.02, 0.92);
-  part(new RoundedBoxGeometry(0.1, 0.12, 0.22, 1, 0.04), darkM, 0.62, 1.02, -0.92);
-  // escapamento duplo
-  const exhGeo = new THREE.CylinderGeometry(0.07, 0.08, 0.3, 10);
-  part(exhGeo, chrome, -2.05, -0.18, 0.45, { rz: Math.PI / 2 });
-  part(exhGeo, chrome, -2.05, -0.18, 0.62, { rz: Math.PI / 2 });
-  // antena
-  part(new THREE.CylinderGeometry(0.012, 0.02, 0.7, 6), darkM, -1.1, 1.45, 0.7);
-  const lightOn = new THREE.MeshStandardMaterial({ color: 0xfff6cc, emissive: 0xffeeaa, emissiveIntensity: 2.6 });
-  const lightRed = new THREE.MeshStandardMaterial({ color: 0x550000, emissive: 0xff2211, emissiveIntensity: 2.4 });
-  part(new THREE.CylinderGeometry(0.11, 0.11, 0.08, 12), lightOn, 2.06, 0.22, 0.58, { rz: Math.PI / 2 });   // faróis redondos
-  part(new THREE.CylinderGeometry(0.11, 0.11, 0.08, 12), lightOn, 2.06, 0.22, -0.58, { rz: Math.PI / 2 });
-  part(new RoundedBoxGeometry(0.08, 0.14, 0.4, 1, 0.04), lightRed, -2.08, 0.24, 0.6);    // lanternas
-  part(new RoundedBoxGeometry(0.08, 0.14, 0.4, 1, 0.04), lightRed, -2.08, 0.24, -0.6);
-  scene.add(group);
-  return group;
-  }
 
-  /* caminhão militar: cabine + caçamba com lona */
-  function buildTruckModel() {
+  // Visual barato enquanto o GLB chega (e fallback se houver erro de rede).
+  function buildPlaceholder(half, color) {
     const group = new THREE.Group();
-    const army = csmMat(new THREE.MeshStandardMaterial({ color: 0x46523a, metalness: 0.3, roughness: 0.55 }));
-    const armyD = csmMat(new THREE.MeshStandardMaterial({ color: 0x333d2b, roughness: 0.7 }));
-    function p2(geo, mat, x, y, z, o = {}) {
-      const m = new THREE.Mesh(geo, mat);
-      m.position.set(x, y, z);
-      m.rotation.set(o.rx || 0, o.ry || 0, o.rz || 0);
-      m.castShadow = true;
-      group.add(m); return m;
-    }
-    p2(new RoundedBoxGeometry(5.4, 0.7, 2.1, 2, 0.12), army, 0, 0.1, 0);                 // chassi
-    p2(new RoundedBoxGeometry(1.6, 1.3, 2.0, 2, 0.18), army, 1.9, 0.95, 0);              // cabine
-    p2(new RoundedBoxGeometry(0.08, 0.55, 1.7, 2, 0.03), glass, 2.55, 1.25, 0, { rz: -0.25 });
-    p2(new RoundedBoxGeometry(0.9, 0.5, 2.0, 2, 0.1), army, 2.9, 0.45, 0);               // capô
-    p2(new RoundedBoxGeometry(3.1, 1.35, 2.1, 2, 0.1), armyD, -0.95, 1.05, 0);           // lona da caçamba
-    p2(new RoundedBoxGeometry(0.5, 0.3, 1.9, 1, 0.08), darkM, 3.3, 0.2, 0);              // para-choque
-    p2(new THREE.CylinderGeometry(0.1, 0.1, 0.08, 10), lightOnG, 3.42, 0.55, 0.7, { rz: Math.PI / 2 });
-    p2(new THREE.CylinderGeometry(0.1, 0.1, 0.08, 10), lightOnG, 3.42, 0.55, -0.7, { rz: Math.PI / 2 });
-    p2(new RoundedBoxGeometry(0.08, 0.12, 0.3, 1, 0.03), lightRedG, -2.65, 0.4, 0.8);
-    p2(new RoundedBoxGeometry(0.08, 0.12, 0.3, 1, 0.03), lightRedG, -2.65, 0.4, -0.8);
-    const star = new THREE.Mesh(new THREE.CircleGeometry(0.3, 5), csmMat(new THREE.MeshStandardMaterial({ color: 0xe8eef4, roughness: 0.6 })));
-    star.position.set(-0.95, 1.05, 1.07); group.add(star);
-    scene.add(group);
-    return group;
-  }
-  /* esportivo: baixo, largo, aerofólio grande, escapamento que pipoca */
-  function buildSportModel(colorHex) {
-    const group = new THREE.Group();
-    const paint = csmMat(new THREE.MeshStandardMaterial({ color: colorHex, metalness: 0.75, roughness: 0.18 }));
-    function p2(geo, mat, x, y, z, o = {}) {
-      const m = new THREE.Mesh(geo, mat);
-      m.position.set(x, y, z);
-      m.rotation.set(o.rx || 0, o.ry || 0, o.rz || 0);
-      m.castShadow = true;
-      group.add(m); return m;
-    }
-    p2(new RoundedBoxGeometry(3.9, 0.5, 1.85, 3, 0.2), paint, 0, 0.02, 0);                // corpo baixo
-    p2(new RoundedBoxGeometry(1.45, 0.42, 1.55, 3, 0.21), paint, -0.2, 0.42, 0);          // cabine rente
-    p2(new RoundedBoxGeometry(0.07, 0.4, 1.4, 2, 0.03), glass, 0.55, 0.4, 0, { rz: -0.55 });
-    p2(new RoundedBoxGeometry(0.06, 0.32, 1.34, 2, 0.03), glass, -0.95, 0.42, 0, { rz: 0.45 });
-    p2(new RoundedBoxGeometry(1.1, 0.16, 1.7, 2, 0.07), paint, 1.55, 0.18, 0, { rz: -0.08 }); // bico
-    p2(new RoundedBoxGeometry(0.5, 0.24, 1.9, 2, 0.1), darkM, 1.95, -0.12, 0);            // splitter
-    p2(new RoundedBoxGeometry(0.6, 0.08, 1.95, 2, 0.04), darkM, -1.85, 0.78, 0, { rz: 0.1 }); // aerofólio
-    p2(new RoundedBoxGeometry(0.09, 0.34, 0.09, 1, 0.03), darkM, -1.82, 0.55, 0.7);
-    p2(new RoundedBoxGeometry(0.09, 0.34, 0.09, 1, 0.03), darkM, -1.82, 0.55, -0.7);
-    p2(new THREE.CylinderGeometry(0.085, 0.095, 0.25, 10), chrome, -2.0, -0.1, 0.35, { rz: Math.PI / 2 });
-    p2(new THREE.CylinderGeometry(0.085, 0.095, 0.25, 10), chrome, -2.0, -0.1, -0.35, { rz: Math.PI / 2 });
-    p2(new RoundedBoxGeometry(0.1, 0.08, 0.5, 1, 0.03), lightOnG, 2.07, 0.2, 0.55, { ry: 0.2 });
-    p2(new RoundedBoxGeometry(0.1, 0.08, 0.5, 1, 0.03), lightOnG, 2.07, 0.2, -0.55, { ry: -0.2 });
-    p2(new RoundedBoxGeometry(0.07, 0.1, 1.5, 1, 0.03), lightRedG, -2.02, 0.3, 0);
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(half[0] * 2, half[1] * 2, half[2] * 2),
+      csmMat(new THREE.MeshStandardMaterial({ color, metalness: 0.35, roughness: 0.5 })),
+    );
+    mesh.castShadow = true;
+    group.add(mesh);
     scene.add(group);
     return group;
   }
 
+  function cachedModel(url) {
+    if (!modelCache.has(url)) modelCache.set(url, modelLoader.loadAsync(url).then(gltf => gltf.scene));
+    return modelCache.get(url);
+  }
+
+  function removeAuxiliaryNodes(root) {
+    const remove = [];
+    root.traverse(obj => {
+      if (/^floor$/i.test(obj.name)) remove.push(obj);
+    });
+    for (const obj of remove) if (obj.parent) obj.parent.remove(obj);
+  }
+
+  function normalizedModel(source, cfg) {
+    const imported = source.clone(true);
+    removeAuxiliaryNodes(imported);
+    imported.traverse(obj => {
+      if (!obj.isMesh) return;
+      // pintura fosca nos materiais sem textura: com o sol do deserto + bloom,
+      // lataria clara e lisa estourava num clarão branco
+      for (const m of Array.isArray(obj.material) ? obj.material : [obj.material]) {
+        if (m && m.isMeshStandardMaterial && !m.map) {
+          m.roughness = 0.85; m.metalness = 0.05;
+          // albedo 1.0 sob o sol estoura o limiar do bloom (carro vira clarão):
+          // rebaixa só os tons quase-brancos pra um branco de tinta
+          const l = m.color.r * 0.299 + m.color.g * 0.587 + m.color.b * 0.114;
+          if (l > 0.72) m.color.multiplyScalar(0.72 / l);
+        }
+      }
+      // cor por veículo SÓ na lataria (material nomeado no cfg): o clone é
+      // obrigatório — o GLB fica em cache e é compartilhado entre os carros
+      if (cfg.bodyTint != null && obj.material && obj.material.name === cfg.bodyMaterial) {
+        obj.material = obj.material.clone();
+        obj.material.color.setHex(cfg.bodyTint);
+      }
+      obj.castShadow = false; // CSM tem 4 cascatas: sombra por submalha quadruplicaria draw calls.
+      obj.receiveShadow = false;
+      obj.userData.importedCarModel = true;
+    });
+
+    // O jogo usa +X como frente. Alguns Sketchfab vêm com o comprimento em Z.
+    const oriented = new THREE.Group();
+    oriented.rotation.y = cfg.modelYaw || 0;
+    oriented.add(imported);
+    oriented.updateMatrixWorld(true);
+    const raw = new THREE.Box3().setFromObject(oriented);
+    const rawSize = raw.getSize(new THREE.Vector3());
+    if (rawSize.x < 1e-4 || rawSize.y < 1e-4 || rawSize.z < 1e-4)
+      throw new Error(`Modelo de veículo sem volume: ${cfg.modelUrl}`);
+
+    // X/Z acompanham exatamente o collider; Y preserva a proporção longitudinal.
+    const targetX = cfg.half[0] * 2 * 0.98;
+    const targetZ = cfg.half[2] * 2 * 0.98;
+    const scaled = new THREE.Group();
+    scaled.scale.set(targetX / rawSize.x, targetX / rawSize.x, targetZ / rawSize.z);
+    scaled.add(oriented);
+    scaled.updateMatrixWorld(true);
+
+    let box = new THREE.Box3().setFromObject(scaled);
+    const groundOffset = -(cfg.wheelR + cfg.half[1] + 0.32);
+    scaled.position.set(
+      -(box.min.x + box.max.x) * 0.5,
+      groundOffset - box.min.y,
+      -(box.min.z + box.max.z) * 0.5,
+    );
+    scaled.updateMatrixWorld(true);
+    box = new THREE.Box3().setFromObject(scaled);
+    const size = box.getSize(new THREE.Vector3());
+    return {
+      root: scaled,
+      metrics: { sizeX: size.x, sizeY: size.y, sizeZ: size.z, minY: box.min.y, maxY: box.max.y },
+    };
+  }
+
+  async function attachModel(v) {
+    try {
+      const source = await cachedModel(v.cfg.modelUrl);
+      const { root, metrics } = normalizedModel(source, v.cfg);
+      // Remove só o placeholder; o grupo é a identidade usada pela física/multiplayer.
+      v.group.traverse(obj => { if (obj.isMesh && !obj.userData.importedCarModel) obj.geometry.dispose(); });
+      v.group.clear();
+      v.group.add(root);
+      for (const wheel of v.wheelMeshes) wheel.visible = false; // o GLB já contém suas rodas.
+      v.modelMetrics = metrics;
+      v.modelRoot = root;
+      v.modelAlignPending = true; // altura final vem das rodas físicas (raycast)
+      v.modelStatus = 'ready';
+    } catch (err) {
+      v.modelStatus = 'fallback';
+      v.modelError = err instanceof Error ? err.message : String(err);
+      console.error(`Falha ao carregar ${v.cfg.modelUrl}:`, err);
+    }
+  }
   /* ---- frota ---- */
   const vehicles = [];
   function makeVehicle(cfg, x, z, ry) {
     const { chassisBody, vehicle } = createPhysics(cfg, x, z);
     if (ry) chassisBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), ry);
-    const v = { cfg, chassisBody, vehicle, group: cfg.build(), wheelMeshes: makeWheels(cfg.wheelR, cfg.wheelW), steerCur: 0, lastThrottle: 0 };
+    const v = {
+      cfg, chassisBody, vehicle, group: cfg.build(), wheelMeshes: makeWheelProxies(),
+      steerCur: 0, lastThrottle: 0, modelStatus: 'loading', modelUrl: cfg.modelUrl, modelMetrics: null,
+    };
     vehicles.push(v);
     return v;
   }
   const CFG_BUGGY = { name: 'BUGGY', mass: 280, half: [1.8, 0.38, 0.85],
     wheels: [[1.28, -0.1, 0.8], [1.28, -0.1, -0.8], [-1.28, -0.1, 0.8], [-1.28, -0.1, -0.8]],
-    wheelR: 0.5, wheelW: 0.34, force: 1650, steer: 0.55, brake: 32, engine: 'normal', build: () => buildBuggyModel(0xe8562a) };
+    wheelR: 0.5, wheelW: 0.34, force: 1650, steer: 0.55, brake: 32, engine: 'normal',
+    modelUrl: '/assets/models/gumball-car.optimized.glb', modelYaw: Math.PI / 2,
+    build: () => buildPlaceholder([1.8, 0.38, 0.85], 0xe8562a) };
   const CFG_TRUCK = { name: 'CAMINHÃO MILITAR', mass: 680, half: [2.7, 0.55, 1.05],
     wheels: [[1.9, -0.18, 1], [1.9, -0.18, -1], [-1.7, -0.18, 1], [-1.7, -0.18, -1]],
-    wheelR: 0.6, wheelW: 0.45, force: 3600, steer: 0.45, brake: 55, grip: 1.6, engine: 'truck', build: buildTruckModel };
+    wheelR: 0.6, wheelW: 0.45, force: 3600, steer: 0.45, brake: 55, grip: 1.6, engine: 'truck',
+    modelUrl: '/assets/models/truck-drifter.optimized.glb', modelYaw: 0,
+    build: () => buildPlaceholder([2.7, 0.55, 1.05], 0x46523a) };
   const mkSport = c => ({ name: 'ESPORTIVO GT', mass: 420, half: [1.9, 0.32, 0.88],
     wheels: [[1.35, -0.02, 0.82], [1.35, -0.02, -0.82], [-1.3, -0.02, 0.82], [-1.3, -0.02, -0.82]],
-    wheelR: 0.42, wheelW: 0.3, force: 5200, steer: 0.5, brake: 60, grip: 2.2, awd: true, engine: 'sport', build: () => buildSportModel(c) });
+    wheelR: 0.42, wheelW: 0.3, force: 5200, steer: 0.5, brake: 60, grip: 2.2, awd: true, engine: 'sport',
+    modelUrl: '/assets/models/mazda-rx7.v2.glb', modelYaw: Math.PI,
+    bodyTint: c, bodyMaterial: '02_-_Default', // pinta a carroceria, preserva o resto
+    build: () => buildPlaceholder([1.9, 0.32, 0.88], c) });
   let cur = makeVehicle(CFG_BUGGY, 7.5, -6);
   for (const s of Structures.carSpots) {
     if (s.type === 'truck') makeVehicle(CFG_TRUCK, s.x, s.z, s.ry);
     else makeVehicle(mkSport(s.type === 'sport2' ? 0x2a6de8 : 0xd61f30), s.x, s.z, s.ry);
   }
+  const ready = Promise.all(vehicles.map(attachModel));
   let dustAcc = 0;
 
   function update(dt, t) {
@@ -233,6 +234,17 @@ export function createCar(deps) {
         v.wheelMeshes[i].position.copy(wt.position);
         v.wheelMeshes[i].quaternion.copy(wt.quaternion);
       }
+      /* altura real: o offset teórico ignorava o curso da suspensão e o
+         modelo afundava ~0,5m. Com o chassi em repouso (suspensão assentada,
+         inclusive dormindo), alinha o fundo do modelo ao terreno — uma vez. */
+      if (v.modelAlignPending && v.chassisBody.velocity.lengthSquared() < 0.04) {
+        v.modelAlignPending = false;
+        v.group.updateMatrixWorld(true);
+        const solo = heightAt(v.group.position.x, v.group.position.z);
+        const box = new THREE.Box3().setFromObject(v.modelRoot);
+        v.modelRoot.position.y += (solo + 0.04 - box.min.y);
+        v.modelRoot.updateMatrixWorld(true);
+      }
     }
     // poeira + áudio do veículo atual
     const kmh = speedKmh();
@@ -269,7 +281,7 @@ export function createCar(deps) {
   }
 
   return {
-    vehicles, nearest, update, speedKmh,
+    vehicles, nearest, update, speedKmh, ready,
     setCur(v) { cur = v; v.chassisBody.wakeUp(); },
     get cfg() { return cur.cfg; },
     get vehicle() { return cur.vehicle; },

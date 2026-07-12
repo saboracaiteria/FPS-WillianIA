@@ -15,11 +15,24 @@ const { Server } = require('socket.io');
 const CityProto = require('./city-destruction-protocol.js');
 
 const app = express();
+/* cache: código do jogo REVALIDA sempre (no-cache + ETag = 304 barato) —
+   sem isto o Cloudflare/navegador seguravam js antigo por 4h e o jogador
+   via a versão velha mesmo com o deploy no ar. Modelos 3D são pesados e
+   têm nome próprio versionado: podem cachear por 1 dia. */
+app.use((req, res, next) => {
+  if (req.path.startsWith('/assets/models/'))
+    res.set('Cache-Control', 'public, max-age=86400');
+  else res.set('Cache-Control', 'no-cache');
+  next();
+});
 // whitelist explícita: nada de server.js/node_modules baixável por qualquer um
 const PUBLIC = ['index.html', 'style.css', 'game.js', 'multiplayer-client.js', 'br-game.js',
   'city-destruction-client.js', 'city-destruction-protocol.js'];
+const MODEL_ASSETS = ['gumball-car.optimized.glb', 'truck-drifter.optimized.glb', 'mazda-rx7.v2.glb'];
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 for (const f of PUBLIC) app.get('/' + f, (req, res) => res.sendFile(path.join(__dirname, f)));
+for (const f of MODEL_ASSETS)
+  app.get('/assets/models/' + f, (req, res) => res.sendFile(path.join(__dirname, 'assets', 'models', f)));
 app.use('/js', express.static(path.join(__dirname, 'js'))); // módulos ES do jogo
 const server = http.createServer(app);
 const io = new Server(server);
@@ -119,6 +132,13 @@ const match = {
   countdownTimer: null, endTimer: null,
 };
 
+function resetRoundState() {
+  match.openedChests.clear();
+  match.drops.clear();
+  match.dropSeq = 0;
+  match.carOwners = {};
+}
+
 function freeCarsOf(id) {
   for (const k of Object.keys(match.carOwners)) {
     if (match.carOwners[k] === id) {
@@ -214,9 +234,7 @@ function startMatch() {
   match.num++;
   match.t0 = Date.now();
   match.plan = buildPlan(match.seed);
-  match.openedChests.clear();
-  match.drops.clear();
-  match.dropSeq = 0;
+  resetRoundState();
   match.plan.flags = { ...match.flags }; // congela as regras da partida
   // destruição da cidade: timestamps ABSOLUTOS do servidor (fonte de verdade)
   if (match.flags.cidade) {
@@ -242,7 +260,6 @@ function startMatch() {
     p.zoneHp = ZONE_HP; p.lastState = Date.now(); p.canDrop = true;
     match.aliveCount++;
   }
-  match.carOwners = {};
   io.emit('matchStart', { t0: match.t0, serverNow: Date.now(), plan: match.plan, num: match.num });
   broadcastRoster();
   sysChat(`Partida #${match.num} começou — ${match.aliveCount} na nave. Boa sorte!`);
@@ -281,6 +298,9 @@ function endMatch(winnerId) {
   match.cityDestruction = { eventId: null, seed: null, state: 'intact', cinematicStartedAt: null, impactAt: null };
   match.endTimer = setTimeout(() => {
     match.seed = (Math.random() * 0xFFFFFFFF) >>> 0; // MAPA NOVO
+    // O cliente recarrega assim que recebe nextMatch. Limpe ANTES de publicar
+    // o lobby, senão o init dessa recarga ainda contém os baús da rodada velha.
+    resetRoundState();
     match.phase = 'LOBBY';
     for (const p of players.values()) { p.spectator = false; p.alive = false; p.placement = 0; }
     io.emit('nextMatch', {}); // clientes recarregam e voltam pro lobby com a seed nova
