@@ -35,6 +35,11 @@ for (const f of PUBLIC) app.get('/' + f, (req, res) => res.sendFile(path.join(__
 app.use('/assets/models', express.static(path.join(__dirname, 'assets', 'models')));
 app.use('/assets/animations', express.static(path.join(__dirname, 'assets', 'Animações')));
 app.use('/js', express.static(path.join(__dirname, 'js'))); // módulos ES do jogo
+// Export visual produzido pelo editor local. Apenas este JSON final é público;
+// o projeto do editor e suas rotas nunca fazem parte deste servidor.
+app.get('/config/weapon-poses.json', (req, res) => {
+  res.sendFile(path.join(__dirname, 'config', 'weapon-poses.json'));
+});
 const server = http.createServer(app);
 // QA pode bloquear o event loop do Chrome por vários segundos ao avançar
 // centenas de ticks. Produção mantém o default do Socket.IO; o harness sobe
@@ -1039,11 +1044,24 @@ io.on('connection', socket => {
 
   socket.on('shotHit', d => {
     const p = players.get(socket.id);
-    if (!p || !d || !players.has(d.targetId)) return;
+    if (!p || !d || !players.has(d.targetId) || d.targetId === socket.id) return;
     // morto/espectador não atira; fora de partida não existe dano
     if (match.phase !== 'PLAYING' || !p.alive) return;
     const victim = players.get(d.targetId);
     if (!victim.alive) return;
+    // anti-cheat CRÍTICO: alcance real entre atirador e vítima. Sem isto, um
+    // cliente adulterado emitia shotHit pra qualquer id do lobby, de qualquer
+    // distância, sem precisar acertar (nem mirar) — matava o mapa inteiro em
+    // menos de 1s. O cliente nunca reporta acerto além de 320 (bala/estilhaço)
+    // ou 5.2 (faca) — ver stepBullets()/__BR_splash() em br-game.js.
+    const MAX_SHOT_RANGE = 340;
+    const dx = p.pos[0] - victim.pos[0], dy = p.pos[1] - victim.pos[1], dz = p.pos[2] - victim.pos[2];
+    if (dx * dx + dy * dy + dz * dz > MAX_SHOT_RANGE * MAX_SHOT_RANGE) {
+      p.strikes = (p.strikes || 0) + 1;
+      if (p.strikes === 15) console.log(`[CHEAT] ${p.nick} (${socket.id}) shotHit fora de alcance repetidas vezes`);
+      if (p.strikes > 60) { console.log(`[CHEAT] ${p.nick} expulso por shotHit fora de alcance`); socket.disconnect(true); }
+      return;
+    }
     // anti-flood: no máx 12 acertos reportados por segundo por atirador
     const now = Date.now();
     p.hitWindow = p.hitWindow.filter(t => now - t < 1000);

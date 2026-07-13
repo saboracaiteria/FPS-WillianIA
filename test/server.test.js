@@ -464,6 +464,40 @@ describe('Anti-cheat', () => {
     assert.ok(total >= 380, `orçamento cortou demais: ${total}`);
   });
 
+  it('dado um shotHit vindo de longe demais, então é descartado (exploit de kill instantâneo)', async t => {
+    // reproduz o hack relatado em produção: cliente adulterado emitindo
+    // shotHit contra qualquer id do lobby, de qualquer distância, sem
+    // precisar mirar/acertar de verdade — matava o mapa inteiro em <1s
+    const { clients } = await playing(t, 2);
+    const [a, b] = clients;
+    for (let i = 0; i < 3; i++) { a.s.emit('state', { pos: [900, 5, 900], rotY: 0 }); await sleep(80); }
+    await sleep(100);
+    const hits = collect(b.s, 'youWereHit');
+    a.s.emit('shotHit', { targetId: b.init.id, dmg: 95, weapon: 'HACK', fromPos: [900, 5, 900] });
+    await sleep(300);
+    assert.equal(hits.length, 0, 'tiro a ~1270m de distância foi aceito');
+  });
+
+  it('dado um alvo a distância real de tiro, então o dano passa normalmente', async t => {
+    const { clients } = await playing(t, 2);
+    const [a, b] = clients;
+    for (let i = 0; i < 3; i++) { a.s.emit('state', { pos: [50, 5, 0], rotY: 0 }); await sleep(80); }
+    await sleep(100);
+    const hit = once(b.s, 'youWereHit');
+    a.s.emit('shotHit', { targetId: b.init.id, dmg: 40, weapon: 'FUZIL', fromPos: [50, 5, 0] });
+    const d = await hit;
+    assert.equal(d.dmg, 40, 'tiro dentro do alcance foi rejeitado por engano');
+  });
+
+  it('dado atirar em si mesmo (targetId = próprio id), então é descartado', async t => {
+    const { clients } = await playing(t, 2);
+    const [a] = clients;
+    const hits = collect(a.s, 'youWereHit');
+    a.s.emit('shotHit', { targetId: a.init.id, dmg: 95, weapon: 'HACK', fromPos: [0, 0, 0] });
+    await sleep(300);
+    assert.equal(hits.length, 0, 'auto-shotHit foi aceito');
+  });
+
   it('dado farm automatizado de baús, então há intervalo mínimo entre aberturas', async t => {
     const { clients } = await playing(t, 2);
     const [a] = clients;
