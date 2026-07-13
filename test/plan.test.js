@@ -56,7 +56,9 @@ describe('Loot dos baús (unidade)', () => {
         assert.ok(['ammo', 'weapon', 'med', 'armor'].includes(it.type), 'tipo desconhecido: ' + it.type);
         if (it.type === 'weapon') {
           rarities.add(it.rarity);
-          assert.ok(it.weapon >= 0 && it.weapon <= 3, 'índice de arma inválido');
+          // arsenal atual: 0-3 clássicas + 6 (SNIPER AGULHA) e 7 (ESCOPETA RAJADA);
+          // 4 (plasma) é exclusivo do boss e 5 é a faca — nunca vêm de baú
+          assert.ok([0, 1, 2, 3, 6, 7].includes(it.weapon), 'índice de arma inválido: ' + it.weapon);
           assert.ok(it.ammo > 0, 'arma sem munição');
         }
         if (it.type === 'ammo') assert.ok(it.amount > 0 && it.amount <= 200);

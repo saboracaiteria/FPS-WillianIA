@@ -17,11 +17,30 @@ export function createCharModels() {
     return cache.get(url);
   }
 
+  /* caixa CIENTE DA POSE: SkinnedMesh.computeBoundingBox usa o esqueleto atual —
+     a bbox ingênua mede os vértices sem skinning (e com quantização vem errada:
+     o Visitante nascia 2m enterrado) */
+  function poseBox(obj) {
+    obj.updateWorldMatrix(true, true);
+    const box = new THREE.Box3();
+    const tmp = new THREE.Box3();
+    obj.traverse(o => {
+      if (o.isSkinnedMesh) {
+        o.computeBoundingBox();
+        tmp.copy(o.boundingBox).applyMatrix4(o.matrixWorld);
+        box.union(tmp);
+      } else if (o.isMesh) {
+        box.expandByObject(o);
+      }
+    });
+    return box;
+  }
+
   /* prepara um "molde": mede uma vez, cada build() clona esqueleto+malha */
   async function character(url, { height = 1.9, yaw = 0 } = {}) {
     const gltf = await cached(url);
     const proto = gltf.scene;
-    const box = new THREE.Box3().setFromObject(proto);
+    const box = poseBox(proto);
     const rawH = Math.max(box.max.y - box.min.y, 1e-3);
     const s = height / rawH;
 
@@ -44,8 +63,7 @@ export function createCharModels() {
       orient.rotation.y = yaw;
       orient.scale.setScalar(s);
       orient.add(inst);
-      orient.updateMatrixWorld(true);
-      const b = new THREE.Box3().setFromObject(orient);
+      const b = poseBox(orient); // pés no chão DE VERDADE (pose atual do rig)
       orient.position.set(-(b.min.x + b.max.x) * 0.5, -b.min.y, -(b.min.z + b.max.z) * 0.5);
       const root = new THREE.Group();
       root.add(orient);

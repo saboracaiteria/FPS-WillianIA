@@ -408,8 +408,10 @@ const Scenery = createScenery();
       t.variant = (i % 40 === 0 && bio > 0.3) ? 0
         : (i % 12 === 0) ? 3
           : bio > 0.34 ? (i % 2 ? 1 : 2) : (i % 3 === 0 ? 2 : 1);
-      if (t.variant === 3) t.s = rand(0.8, 1.2); // toco não vira arbusto gigante
-      if (t.variant === 0) t.s = rand(1.2, 1.6); // ilha flutuante imponente
+      // escala pelo índice (sem rand(): este bloco roda em timing assíncrono e
+      // o stream semeado precisa ficar idêntico entre os clientes)
+      if (t.variant === 3) t.s = 0.8 + (i % 5) * 0.1;  // toco não vira arbusto gigante
+      if (t.variant === 0) t.s = 1.2 + (i % 5) * 0.1;  // ilha flutuante imponente
     }
     rebucketTrees(player.pos.x, player.pos.z);
   } catch (err) { console.error('Árvores GLB falharam — mantendo procedurais:', err); }
@@ -417,8 +419,20 @@ const Scenery = createScenery();
 
 /* pontos de interesse novos: MERCADO na beira da cidade, REFÚGIO NA ÁRVORE na
    floresta e barris espalhados — com colisão (player + veículos) e, por serem
-   sites, os baús do Battle Royale nascem neles automaticamente */
+   sites, os baús do Battle Royale nascem neles automaticamente.
+   RNG PRÓPRIO e determinístico: este bloco roda depois do load assíncrono dos
+   GLBs — se usasse o rand() semeado global, cada cliente consumiria a sequência
+   num ponto diferente (timing de rede) e o refúgio nasceria em lugares
+   DIFERENTES pra cada jogador, quebrando o mundo compartilhado */
 (async () => {
+  let poiSeed = ((window.__MP_init && window.__MP_init.worldSeed) >>> 0 || 424242) ^ 0xBEEF;
+  const poiRand = (a = 1, b) => {
+    poiSeed = (poiSeed + 0x6D2B79F5) | 0;
+    let x = Math.imul(poiSeed ^ (poiSeed >>> 15), 1 | poiSeed);
+    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+    const r = ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+    return b === undefined ? r * a : a + r * (b - a);
+  };
   const placeProp = (p, x, z, ry) => {
     p.root.position.set(x, heightAt(x, z), z);
     p.root.rotation.y = ry || 0;
@@ -441,14 +455,14 @@ const Scenery = createScenery();
     // refúgio na árvore: primeiro canto de floresta plano que achar
     let tx = 0, tz = 0;
     for (let i = 0; i < 300; i++) {
-      const a = rand(TAU), r = rand(150, 420);
+      const a = poiRand(TAU), r = poiRand(150, 420);
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
       if (biomeAt(x, z) > 0.4 && slopeAt(x, z) < 0.3 && heightAt(x, z) > WATER_LEVEL + 1.5 &&
           !Structures.sites.some(s => Math.hypot(x - s.x, z - s.z) < s.r + 20)) { tx = x; tz = z; break; }
     }
     if (tx || tz) {
       const casa = await Scenery.prop('/assets/models/Cenários/low_poly_tree_house.glb', { height: 13 });
-      placeProp(casa, tx, tz, rand(TAU));
+      placeProp(casa, tx, tz, poiRand(TAU));
       Structures.sites.push({ x: tx, z: tz, r: Math.max(casa.size.x, casa.size.z) / 2 + 3, type: 'refúgio' });
     }
 
@@ -460,7 +474,7 @@ const Scenery = createScenery();
       if (!bx && !bz) continue;
       const b = barril.root.clone(true);
       b.position.set(bx, heightAt(bx, bz), bz);
-      b.rotation.y = rand(TAU);
+      b.rotation.y = poiRand(TAU);
       scene.add(b);
       addObstacle(bx, bz, 0.55);
     }

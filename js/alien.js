@@ -67,7 +67,9 @@ export function createAlien(deps) {
       group.add(leg);
     }
   }
-  group.position.set(SITE.x + 6, sy, SITE.z + 6);
+  // altura no PONTO DELE (sy é a altura do disco, 6m ao lado — numa duna
+  // inclinada o Visitante nascia até 2m enterrado)
+  group.position.set(SITE.x + 6, heightAt(SITE.x + 6, SITE.z + 6), SITE.z + 6);
   scene.add(group);
 
   /* pele nova: alien rigado (alien.optimized.glb) com a animação embutida
