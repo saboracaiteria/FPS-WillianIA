@@ -11,3 +11,10 @@ docker-compose.override*.yml
 /gumball_car.glb
 /low-poly_truck_car_drifter.glb
 /mazda_rx7_stylised.glb
+
+# fontes pesadas de personagem/arma — no repo vão só os .optimized.glb
+assets/models/Personagens/low_poly_alien_character_rigged.glb
+assets/models/Armas/bazooka_rocket_launcher_low_poly.glb
+
+# evidências geradas localmente pelos harness de captura
+output/

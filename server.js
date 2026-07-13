@@ -28,11 +28,11 @@ app.use((req, res, next) => {
 // whitelist explícita: nada de server.js/node_modules baixável por qualquer um
 const PUBLIC = ['index.html', 'style.css', 'game.js', 'multiplayer-client.js', 'br-game.js',
   'city-destruction-client.js', 'city-destruction-protocol.js'];
-const MODEL_ASSETS = ['gumball-car.optimized.glb', 'truck-drifter.optimized.glb', 'mazda-rx7.v2.glb'];
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 for (const f of PUBLIC) app.get('/' + f, (req, res) => res.sendFile(path.join(__dirname, f)));
-for (const f of MODEL_ASSETS)
-  app.get('/assets/models/' + f, (req, res) => res.sendFile(path.join(__dirname, 'assets', 'models', f)));
+// modelos 3D: static restrito à pasta (o express.static bloqueia path traversal);
+// a pasta agora tem subdiretórios (Armas/, Cenários/, Personagens/, Veículos/)
+app.use('/assets/models', express.static(path.join(__dirname, 'assets', 'models')));
 app.use('/js', express.static(path.join(__dirname, 'js'))); // módulos ES do jogo
 const server = http.createServer(app);
 const io = new Server(server);
@@ -178,9 +178,11 @@ function buildPlan(seed) {
 }
 
 /* loot dos baús — rolado no servidor (anti-trapaça leve) */
-const WEAPON_TIERS = [ // idx do arsenal no jogo: 1=escopeta 0=fuzil 2=DMR 3=bazuca 4=plasma
+const WEAPON_TIERS = [ // idx do arsenal: 1=escopeta 0=fuzil 2=DMR 3=bazuca 4=plasma 6=sniper leve 7=escopeta rajada
   { rarity: 'incomum',  weapon: 1, ammo: 18 },
+  { rarity: 'incomum',  weapon: 7, ammo: 27 },
   { rarity: 'raro',     weapon: 0, ammo: 90 },
+  { rarity: 'raro',     weapon: 6, ammo: 30 },
   { rarity: 'épico',    weapon: 2, ammo: 24 },
   { rarity: 'lendário', weapon: 3, ammo: 3 },
 ];
@@ -188,10 +190,10 @@ function rollChest(rng, luck = 0) {
   const items = [];
   const r = rng() + luck;
   if (r < 0.38) items.push({ type: 'ammo', amount: 40 + Math.floor(rng() * 50) });
-  else if (r < 0.62) items.push({ type: 'weapon', ...WEAPON_TIERS[0] });
-  else if (r < 0.82) items.push({ type: 'weapon', ...WEAPON_TIERS[1] });
-  else if (r < 0.94) items.push({ type: 'weapon', ...WEAPON_TIERS[2] });
-  else items.push({ type: 'weapon', ...WEAPON_TIERS[3] });
+  else if (r < 0.62) items.push({ type: 'weapon', ...WEAPON_TIERS[rng() < 0.5 ? 0 : 1] }); // incomum: escopeta clássica ou rajada
+  else if (r < 0.82) items.push({ type: 'weapon', ...WEAPON_TIERS[rng() < 0.55 ? 2 : 3] }); // raro: fuzil ou sniper leve
+  else if (r < 0.94) items.push({ type: 'weapon', ...WEAPON_TIERS[4] });
+  else items.push({ type: 'weapon', ...WEAPON_TIERS[5] });
   if (rng() < 0.55) items.push({ type: 'med' });
   if (rng() < 0.3) items.push({ type: 'armor', amount: 50 });
   if (rng() < 0.22) items.push({ type: 'ammo', amount: 24 });

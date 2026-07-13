@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 
 export function createAlien(deps) {
-  const { rand, TAU, _v1, _v2, heightAt, biomeAt, WATER_LEVEL, CITY, SFX, FX, scene, csmMat, addScore, addKillFeed, showBanner, unlockWeapon, state, player, playerDamage, Bosses, Pickups, MFlags, setTimeScale } = deps;
+  const { rand, TAU, _v1, _v2, heightAt, biomeAt, WATER_LEVEL, CITY, SFX, FX, scene, csmMat, addScore, addKillFeed, showBanner, unlockWeapon, state, player, playerDamage, Bosses, Pickups, MFlags, setTimeScale, Chars } = deps;
   // acha um ponto de deserto para a queda do disco
   let SITE = { x: 260, z: 260 };
   for (let i = 0; i < 200; i++) {
@@ -67,8 +67,25 @@ export function createAlien(deps) {
       group.add(leg);
     }
   }
-  group.position.set(SITE.x + 6, sy, SITE.z + 6);
+  // altura no PONTO DELE (sy é a altura do disco, 6m ao lado — numa duna
+  // inclinada o Visitante nascia até 2m enterrado)
+  group.position.set(SITE.x + 6, heightAt(SITE.x + 6, SITE.z + 6), SITE.z + 6);
   scene.add(group);
+
+  /* pele nova: alien rigado (alien.optimized.glb) com a animação embutida
+     "Take 001" em loop — FSM/hitbox/dano continuam os mesmos */
+  let mixer = null, hasModel = false;
+  if (Chars) Chars.character('/assets/models/Personagens/alien.optimized.glb', { height: 3.7 })
+    .then(mold => {
+      const inst = mold.build();
+      group.traverse(o => { if (o.isMesh) o.visible = false; }); // corpo procedural some
+      group.add(inst.root);
+      mixer = inst.mixer;
+      hasModel = true;
+      const take = Object.values(inst.actions)[0];
+      if (take) take.play();
+    })
+    .catch(err => console.error('Alien GLB falhou — Visitante segue procedural:', err));
 
   const B = { alive: true, active: false, hp: 1900, hpMax: 1900, yaw: 0, phase: 0, nextShot: 0, blinkT: 6, deadT: -1, respawnT: 0 };
   const orbs = [];
@@ -164,8 +181,12 @@ export function createAlien(deps) {
     B.yaw = Math.atan2(dx, dz);
     group.rotation.y = B.yaw;
     group.position.y = heightAt(group.position.x, group.position.z) + 0.25 + Math.sin(B.phase * 2) * 0.15;
-    parts.armR.rotation.x = -1.2; // mão erguida disparando
-    parts.armL.rotation.x = Math.sin(B.phase * 1.5) * 0.3;
+    if (hasModel) {
+      mixer.update(dt); // "Take 001" em loop dá vida ao corpo inteiro
+    } else {
+      parts.armR.rotation.x = -1.2; // mão erguida disparando
+      parts.armL.rotation.x = Math.sin(B.phase * 1.5) * 0.3;
+    }
     // tiro triplo de plasma
     if (dP < 70 && state.gameTime >= B.nextShot && !player.dead) {
       B.nextShot = state.gameTime + 1.6;

@@ -6,8 +6,13 @@ const fs = require('node:fs');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 
-const CHROME = ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium']
-  .find(p => fs.existsSync(p));
+const CHROME = [
+  '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium',
+  // Windows (máquina do Willian): mesmos testes, mesmo Chrome headless
+  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  process.env.CHROME_PATH || '',
+].find(p => p && fs.existsSync(p));
 
 async function bootGame({ port, serverPort, worldSeed = '424242', extraEnv = {} }) {
   const puppeteer = require('puppeteer-core');

@@ -301,6 +301,10 @@ describe('Jogabilidade (Chrome headless + tick manual)', { skip: !CHROME && 'Chr
       // patrulha só enxerga dentro do cone de visão: aponta o inimigo pro
       // jogador (o yaw herdado varia com quanto a IA andou nos testes antes)
       e.yaw = Math.atan2(P.pos.x - 40, P.pos.z - 28);
+      // primeiro "sense" já no primeiro tick, ANTES da patrulha girar o corpo
+      // rumo ao waypoint herdado — sem isto o resultado dependia da sorte do
+      // waypoint (qualquer mudança na sequência de rand() upstream flipava)
+      e.senseAcc = 1;
       window.__BR_active = false; // liga a IA só neste teste
       const hp0 = P.health;
       QA.tick(300); // 5s de jogo

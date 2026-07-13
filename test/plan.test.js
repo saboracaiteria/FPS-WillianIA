@@ -56,7 +56,9 @@ describe('Loot dos baús (unidade)', () => {
         assert.ok(['ammo', 'weapon', 'med', 'armor'].includes(it.type), 'tipo desconhecido: ' + it.type);
         if (it.type === 'weapon') {
           rarities.add(it.rarity);
-          assert.ok(it.weapon >= 0 && it.weapon <= 3, 'índice de arma inválido');
+          // arsenal atual: 0-3 clássicas + 6 (SNIPER AGULHA) e 7 (ESCOPETA RAJADA);
+          // 4 (plasma) é exclusivo do boss e 5 é a faca — nunca vêm de baú
+          assert.ok([0, 1, 2, 3, 6, 7].includes(it.weapon), 'índice de arma inválido: ' + it.weapon);
           assert.ok(it.ammo > 0, 'arma sem munição');
         }
         if (it.type === 'ammo') assert.ok(it.amount > 0 && it.amount <= 200);
@@ -76,7 +78,8 @@ describe('Ranking global (unidade)', () => {
     const alvo = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'rank-')), 'rank.json');
     const { execSync } = require('node:child_process');
     // processo limpo: RANK_FILE é lido no carregamento do módulo
-    const out = execSync(process.execPath +
+    // (execPath entre aspas: no Windows o node mora em "C:\Program Files\...")
+    const out = execSync(JSON.stringify(process.execPath) +
       ' -e "const s=require(\'./server.js\'); s.rankEntry(\'Env\').points=7; s.saveRankNow(); console.log(\'ok\')"',
       { cwd: path.join(__dirname, '..'), env: { ...process.env, RANK_FILE: alvo }, encoding: 'utf8' });
     assert.match(out, /ok/);
