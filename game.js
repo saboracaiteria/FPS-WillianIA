@@ -804,6 +804,7 @@ const player = {
   lastDamageT: -99, dead: false,
   coyote: 0,
   bobTime: 0, bobAmp: 0,
+  shotSeq: 0, // contador de ações para animar disparos remotos mesmo em pacote volatile
   landDip: 0, landDipVel: 0,
   stepAcc: 0,
   slideT: -1, slideDir: new THREE.Vector3(),
@@ -1261,6 +1262,7 @@ function rayBlockedAt(origin, dir, maxDist) {
 const _rayDir = new THREE.Vector3(), _rayOrig = new THREE.Vector3(), _hitPos = new THREE.Vector3();
 const _hitAgg = new THREE.Vector3();
 function fire(t) {
+  player.shotSeq = (player.shotSeq + 1) & 0x7fffffff;
   // machado/melee: golpe curto, sem munição/flash/som de tiro
   if (gun.melee) {
     gun.cycleT = gun.meleeDuration || 0.45;

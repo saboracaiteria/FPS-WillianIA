@@ -170,7 +170,9 @@
       group.visible = false; MP.scene.add(group);
       const rp = {
         id: player.id, nick: player.nick, alive: player.alive !== false, group, body,
-        targetPos: new THREE.Vector3(), targetYaw: 0, speed: 0, walk: 0, rig: null, rigAnimator: null,
+        targetPos: new THREE.Vector3(), targetYaw: 0, speed: 0, walk: 0,
+        grounded: true, crouch: false, velY: 0, weapon: 0, shotSeq: 0, deadT: 0,
+        rig: null, rigAnimator: null,
         spheres: [{ c: new THREE.Vector3(), r: .29, part: 'head' }, { c: new THREE.Vector3(), r: .43, part: 'body' }, { c: new THREE.Vector3(), r: .34, part: 'body' }],
         hitSpheres() {
           const p = this.group.position;
@@ -312,7 +314,17 @@
         if (player.id === INIT.id) continue;
         present.add(player.id);
         const rp = makeRemote(player);
-        if (rp) { rp.nick = player.nick; rp.alive = !!player.alive; if (!rp.alive) rp.group.visible = false; }
+        if (rp) {
+          const respawned = !rp.alive && !!player.alive;
+          rp.nick = player.nick;
+          rp.alive = !!player.alive;
+          if (respawned) {
+            rp.deadT = 0;
+            rp.group.rotation.x = 0;
+            if (rp.rigAnimator?.reset) rp.rigAnimator.reset();
+          }
+          if (!rp.alive && rp.deadT <= 0) rp.group.visible = false;
+        }
       }
       for (const id of [...remotes.keys()]) if (!present.has(id)) removeRemote(id);
       updateHud();
@@ -351,7 +363,13 @@
       resultData = null;
       const result = el('arenaResult'); if (result) result.style.display = 'none';
       remaining = room.timeLimit * 60;
-      for (const rp of remotes.values()) { rp.alive = true; rp.group.visible = false; }
+      for (const rp of remotes.values()) {
+        rp.alive = true;
+        rp.deadT = 0;
+        rp.group.rotation.x = 0;
+        rp.group.visible = false;
+        if (rp.rigAnimator?.reset) rp.rigAnimator.reset();
+      }
       respawn(data.spawn, 1400);
       buildBoundary(); updateHud();
       notice(room.mode === 'DUEL' ? 'DUELO INICIADO' : 'MATA-MATA INICIADO', 1800);
@@ -371,7 +389,19 @@
       if (!rp) rp = makeRemote(data);
       if (!rp || !Array.isArray(data.pos)) return;
       rp.targetPos.set(data.pos[0], data.pos[1], data.pos[2]);
-      rp.targetYaw = data.rotY || 0; rp.alive = data.alive !== false; rp.group.visible = rp.alive;
+      rp.targetYaw = data.rotY || 0;
+      if (!rp.alive && data.alive !== false) {
+        rp.deadT = 0;
+        rp.group.rotation.x = 0;
+        if (rp.rigAnimator?.reset) rp.rigAnimator.reset();
+      }
+      rp.alive = data.alive !== false;
+      rp.group.visible = rp.alive;
+      rp.grounded = data.grounded !== false;
+      rp.crouch = !!data.crouch;
+      rp.velY = Number.isFinite(data.velY) ? data.velY : 0;
+      rp.weapon = Number.isInteger(data.weapon) ? data.weapon : 0;
+      rp.shotSeq = Number.isInteger(data.shotSeq) ? data.shotSeq : rp.shotSeq;
     });
     socket.on('arenaDamaged', data => {
       if (!data) return;
@@ -384,7 +414,8 @@
     socket.on('arenaHitConfirmed', () => { MP.showHitmarker(false); MP.SFX.hit(); });
     socket.on('arenaKilled', data => {
       if (!data) return;
-      const rp = remotes.get(data.victimId); if (rp) { rp.alive = false; rp.group.visible = false; }
+      const rp = remotes.get(data.victimId);
+      if (rp) { rp.alive = false; rp.deadT = 0.001; rp.group.visible = true; }
       if (data.victimId === INIT.id) {
         serverDead = true; suicideSent = true;
         serverHealth = 0;
@@ -411,7 +442,14 @@
       let position = MP.player.pos, rotY = MP.camera.rotation.y;
       if (G.state.driving) { position = G.Car.group.position; rotY = G.Car.group.rotation.y; }
       else if (G.state.flying) { position = G.Heli.group.position; rotY = G.Heli.group.rotation.y; }
-      socket.volatile.emit('arenaState', { pos: [position.x, position.y, position.z], rotY });
+      socket.volatile.emit('arenaState', {
+        pos: [position.x, position.y, position.z], rotY,
+        grounded: MP.player.onGround,
+        crouch: MP.player.crouchT > 0.45,
+        velY: MP.player.vel.y,
+        weapon: G.gun?.pistol ? 2 : G.gun?.pellets > 1 ? 1 : G.gun?.melee ? 3 : 0,
+        shotSeq: MP.player.shotSeq,
+      });
     }, 100));
 
     let previous = performance.now();
@@ -420,6 +458,20 @@
       const dt = Math.min(.05, Math.max(.001, (now - previous) / 1000)); previous = now;
       for (const rp of remotes.values()) {
         if (!rp.group.visible) continue;
+        if (rp.deadT > 0) {
+          rp.deadT += dt;
+          if (rp.rigAnimator) {
+            rp.group.rotation.x = 0;
+            rp.rigAnimator.update(dt, 0, now / 1000, {
+              dead: true, grounded: true, weapon: rp.weapon, shotSeq: rp.shotSeq,
+            });
+            if (rp.deadT >= 2.75) rp.group.visible = false;
+          } else {
+            rp.group.rotation.x = Math.min(rp.deadT * 2, Math.PI / 2);
+            if (rp.deadT >= 1.2) rp.group.visible = false;
+          }
+          continue;
+        }
         const oldX = rp.group.position.x, oldZ = rp.group.position.z;
         const blend = 1 - Math.exp(-14 * dt);
         rp.group.position.lerp(rp.targetPos, blend);
@@ -428,7 +480,13 @@
         rp.group.rotation.y += delta * blend;
         rp.speed = Math.hypot(rp.group.position.x - oldX, rp.group.position.z - oldZ) / dt;
         rp.walk += dt * Math.min(12, rp.speed * 2.4);
-        if (rp.rigAnimator) rp.rigAnimator.update(dt, rp.speed, now / 1000);
+        if (rp.rigAnimator) rp.rigAnimator.update(dt, rp.speed, now / 1000, {
+          grounded: rp.grounded,
+          crouch: rp.crouch,
+          velY: rp.velY,
+          weapon: rp.weapon,
+          shotSeq: rp.shotSeq,
+        });
         else {
           const swing = Math.sin(rp.walk) * Math.min(.75, rp.speed * .08);
           rp.body.legL.rotation.x = swing; rp.body.legR.rotation.x = -swing;

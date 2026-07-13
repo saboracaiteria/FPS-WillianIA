@@ -20,7 +20,7 @@ const app = express();
    via a versão velha mesmo com o deploy no ar. Modelos 3D são pesados e
    têm nome próprio versionado: podem cachear por 1 dia. */
 app.use((req, res, next) => {
-  if (req.path.startsWith('/assets/models/'))
+  if (req.path.startsWith('/assets/models/') || req.path.startsWith('/assets/animations/'))
     res.set('Cache-Control', 'public, max-age=86400');
   else res.set('Cache-Control', 'no-cache');
   next();
@@ -33,6 +33,7 @@ for (const f of PUBLIC) app.get('/' + f, (req, res) => res.sendFile(path.join(__
 // modelos 3D: static restrito à pasta (o express.static bloqueia path traversal);
 // a pasta agora tem subdiretórios (Armas/, Cenários/, Personagens/, Veículos/)
 app.use('/assets/models', express.static(path.join(__dirname, 'assets', 'models')));
+app.use('/assets/animations', express.static(path.join(__dirname, 'assets', 'Animações')));
 app.use('/js', express.static(path.join(__dirname, 'js'))); // módulos ES do jogo
 const server = http.createServer(app);
 // QA pode bloquear o event loop do Chrome por vários segundos ao avançar
@@ -46,6 +47,19 @@ const clean = s => String(s == null ? '' : s).replace(/[<>&"']/g, '').trim();
 // versão leve: preserva aspas (nomes de arma, chat) — o cliente escapa antes de renderizar
 const cleanSoft = s => String(s == null ? '' : s).replace(/[<>&]/g, '').trim();
 const cleanNick = n => clean(n).slice(0, 14) || 'Recruta';
+function cleanPlayerAnimation(d) {
+  const velY = Number(d && d.velY);
+  const weapon = d && Number.isInteger(d.weapon) && d.weapon >= 0 && d.weapon <= 3 ? d.weapon : 0;
+  const shotSeq = d && Number.isInteger(d.shotSeq)
+    ? Math.max(0, Math.min(0x7fffffff, d.shotSeq)) : 0;
+  return {
+    grounded: !d || d.grounded !== false,
+    crouch: !!(d && d.crouch),
+    velY: Number.isFinite(velY) ? Math.max(-80, Math.min(40, velY)) : 0,
+    weapon,
+    shotSeq,
+  };
+}
 function mulberry32(seed) {
   let s = seed >>> 0;
   return () => {
@@ -868,6 +882,7 @@ io.on('connection', socket => {
     socket.to('arena:' + room.id).volatile.emit('arenaPlayerUpdate', {
       id: socket.id, pos, rotY: +d.rotY || 0,
       nick: p.nick, colors: p.colors, alive: true,
+      ...cleanPlayerAnimation(d),
     });
   });
 
@@ -1018,6 +1033,7 @@ io.on('connection', socket => {
       ship: !!d.ship, chute: !!d.chute, car: Number.isInteger(d.car) ? d.car : -1,
       heli: !!d.heli,
       nick: p.nick, colors: p.colors,
+      ...cleanPlayerAnimation(d),
     });
   });
 

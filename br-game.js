@@ -109,7 +109,9 @@
       const rp = {
         id, nick: nk || '???', alive: true, isBoss: false,
         group, body, targetPos: group.position.clone(), yaw: 0, targetYaw: 0,
-        chute: false, ship: false, car: -1, heli: false, hitT: 0, deadT: 0, lastPos: group.position.clone(), speed: 0, walkPh: 0,
+        chute: false, ship: false, car: -1, heli: false,
+        grounded: true, crouch: false, velY: 0, weapon: 0, shotSeq: 0,
+        hitT: 0, deadT: 0, lastPos: group.position.clone(), speed: 0, walkPh: 0,
         rig: null, rigAnimator: null, modelStatus: remoteCharacter ? 'loading' : 'fallback', disposed: false,
         sphCache: [
           { c: new THREE.Vector3(), r: 0.28, part: 'head' },
@@ -1040,6 +1042,11 @@
       rp.chute = !!d.chute;
       rp.car = typeof d.car === 'number' ? d.car : -1;
       rp.heli = !!d.heli;
+      rp.grounded = d.grounded !== false;
+      rp.crouch = !!d.crouch;
+      rp.velY = Number.isFinite(d.velY) ? d.velY : 0;
+      rp.weapon = Number.isInteger(d.weapon) ? d.weapon : 0;
+      rp.shotSeq = Number.isInteger(d.shotSeq) ? d.shotSeq : rp.shotSeq;
     });
     socket.on('playerLeft', d => removeRemote(d.id));
     socket.on('youWereHit', d => {
@@ -1235,6 +1242,11 @@
       socket.volatile.emit('state', {
         pos: [p.x, p.y, p.z], rotY, car, heli,
         ship: S.phase === 'SHIP', chute: S.phase === 'FALL' && S.chuteOpen,
+        grounded: S.phase === 'SHIP' || (S.phase === 'PLAY' && MP.player.onGround),
+        crouch: S.phase === 'PLAY' && MP.player.crouchT > 0.45,
+        velY: S.phase === 'FALL' ? fallVy : MP.player.vel.y,
+        weapon: G.gun?.pistol ? 2 : G.gun?.pellets > 1 ? 1 : G.gun?.melee ? 3 : 0,
+        shotSeq: MP.player.shotSeq,
       });
     }, 100));
     const _eul = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -1288,10 +1300,18 @@
       for (const rp of remotes.values()) {
         if (rp.alive && rp.car >= 0) window.__BR_takenCars.add(rp.car);
         if (rp.alive && rp.heli) window.__BR_heliTaken = true;
-        if (rp.deadT > 0 && rp.deadT < 1.2) { // tombando
+        if (rp.deadT > 0) {
           rp.deadT += dt;
-          rp.group.rotation.x = Math.min(rp.deadT * 2, Math.PI / 2);
-          if (rp.deadT >= 1.2) rp.group.visible = false;
+          rp.group.visible = rp.deadT < 2.75;
+          if (rp.rigAnimator) {
+            rp.group.rotation.x = 0;
+            rp.rigAnimator.update(dt, 0, nowMs / 1000, {
+              dead: true, grounded: true, weapon: rp.weapon, shotSeq: rp.shotSeq,
+            });
+          } else {
+            rp.group.rotation.x = Math.min(rp.deadT * 2, Math.PI / 2);
+            if (rp.deadT >= 1.2) rp.group.visible = false;
+          }
           continue;
         }
         // visível também na nave (todo mundo viaja no convés); some dentro de carro/heli
@@ -1310,7 +1330,14 @@
         rp.body.armL.rotation.x = -sw * 0.8;
         rp.body.armR.rotation.x = sw * 0.8;
         rp.body.chute.visible = rp.chute;
-        if (rp.rigAnimator) rp.rigAnimator.update(dt, rp.speed, nowMs / 1000);
+        if (rp.rigAnimator) rp.rigAnimator.update(dt, rp.speed, nowMs / 1000, {
+          grounded: rp.ship ? true : rp.grounded,
+          crouch: rp.crouch,
+          velY: rp.chute ? Math.min(-1, rp.velY) : rp.velY,
+          chute: rp.chute,
+          weapon: rp.weapon,
+          shotSeq: rp.shotSeq,
+        });
         if (rp.hitT > 0) {
           rp.hitT -= dt;
           for (const m of rp.body.mats) { m.emissive.setHex(0xff2222); m.emissiveIntensity = Math.max(0, rp.hitT * 3); }

@@ -36,7 +36,9 @@
     /* Começa a baixar o avatar rigado ainda no lobby. A partida não fica
        bloqueada: br-game mantém o boneco procedural até esta Promise resolver. */
     const remoteCharacter = G.Chars && typeof G.Chars.character === 'function'
-      ? G.Chars.character('/assets/models/Personagens/low_poly_helldiver_rig.glb', { height: 1.9, yaw: Math.PI })
+      ? G.Chars.character('/assets/models/Personagens/low_poly_helldiver_rig.glb', {
+        height: 1.9, yaw: Math.PI, animations: 'mixamo-player',
+      })
         .catch(err => {
           console.error('Avatar Helldiver online falhou - mantendo fallback procedural:', err);
           return null;
