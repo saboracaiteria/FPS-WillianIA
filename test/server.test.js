@@ -452,16 +452,30 @@ describe('Anti-cheat', () => {
     assert.equal(jumped.length, 0, 'teleporte de 800m foi aceito');
   });
 
-  it('dado dano acima do orçamento (520/s), então o excedente é descartado', async t => {
-    const { clients } = await playing(t, 2);
+  it('dado o orçamento de dano (450/s), então não dá pra ferir o lobby inteiro num tique', async t => {
+    // 6 jogadores: A tenta espalhar dano letal em 5 vítimas de uma vez. O
+    // orçamento por atirador (450/s) corta o excedente, então só ~4 hits de 95
+    // passam nessa janela — impossível zerar 5 pessoas simultaneamente.
+    const { clients } = await playing(t, 6);
+    const [a, ...victims] = clients;
+    const hits = victims.map(v => collect(v.s, 'youWereHit'));
+    for (const v of victims) // um tiro forte em cada vítima, tudo no mesmo tique
+      a.s.emit('shotHit', { targetId: v.init.id, dmg: 95, weapon: 'HACK', fromPos: [0, 0, 0] });
+    await sleep(250);
+    const total = hits.reduce((s, arr) => s + arr.reduce((x, h) => x + h.dmg, 0), 0);
+    assert.ok(total <= 450, `orçamento furado: ${total} de dano num tique`);
+    assert.ok(total >= 300, `orçamento cortou demais: ${total}`);
+  });
+
+  it('dado o HP autoritativo, então o dano PARA quando a vítima morre (não vaza até o teto)', async t => {
+    const { clients } = await playing(t, 3);
     const [a, b] = clients;
     const hits = collect(b.s, 'youWereHit');
-    for (let i = 0; i < 12; i++)
+    for (let i = 0; i < 8; i++) // martelo de tiros, mas B só aguenta ~2
       a.s.emit('shotHit', { targetId: b.init.id, dmg: 95, weapon: 'HACK', fromPos: [0, 0, 0] });
-    await sleep(500);
-    const total = hits.reduce((s, h) => s + h.dmg, 0);
-    assert.ok(total <= 520, `passaram ${total} de dano num segundo`);
-    assert.ok(total >= 380, `orçamento cortou demais: ${total}`);
+    await sleep(400);
+    // 2 hits (190) matam B; os seguintes são rejeitados (vítima morta)
+    assert.ok(hits.length <= 3, `dano continuou depois da morte: ${hits.length} hits`);
   });
 
   it('dado um shotHit vindo de longe demais, então é descartado (exploit de kill instantâneo)', async t => {
@@ -496,6 +510,45 @@ describe('Anti-cheat', () => {
     a.s.emit('shotHit', { targetId: a.init.id, dmg: 95, weapon: 'HACK', fromPos: [0, 0, 0] });
     await sleep(300);
     assert.equal(hits.length, 0, 'auto-shotHit foi aceito');
+  });
+
+  it('dado dano de combate suficiente, então o SERVIDOR declara a morte (autoridade do HP)', async t => {
+    // com 3 jogadores a partida não acaba ao matar 1 — dá pra checar o kill limpo.
+    // B NUNCA manda `died`: se ele morre mesmo assim, a autoridade é do servidor.
+    const { clients } = await playing(t, 3);
+    const [a, b] = clients;
+    const killed = once(a.s, 'playerKilled');
+    a.s.emit('shotHit', { targetId: b.init.id, dmg: 95, weapon: 'FUZIL', fromPos: [0, 0, 0] });
+    await sleep(60);
+    a.s.emit('shotHit', { targetId: b.init.id, dmg: 95, weapon: 'FUZIL', fromPos: [0, 0, 0] });
+    const k = await killed;
+    assert.equal(k.victimId, b.init.id, 'servidor não matou a vítima pelo HP-espelho');
+    assert.equal(k.killerId, a.init.id, 'a kill não foi creditada ao atirador real');
+    assert.equal(k.killerKills, 1);
+  });
+
+  it('dado um cliente que finge estar vivo (nunca manda died), então o servidor o elimina', async t => {
+    // godmode defensivo: mesmo ignorando o dano localmente, o mirror do servidor
+    // zera e o servidor força a morte
+    const { clients } = await playing(t, 3);
+    const [a, b] = clients;
+    const iv = setInterval(() => b.s.emit('state', { pos: [0, 0, 0], rotY: 0 }), 60); // B "vivo"
+    t.after(() => clearInterval(iv));
+    const killed = once(a.s, 'playerKilled');
+    for (let i = 0; i < 2; i++) { a.s.emit('shotHit', { targetId: b.init.id, dmg: 95, weapon: 'FUZIL', fromPos: [0, 0, 0] }); await sleep(60); }
+    const k = await killed;
+    assert.equal(k.victimId, b.init.id, 'cliente em godmode não foi eliminado pelo servidor');
+  });
+
+  it('dada armadura reportada, então o HP-espelho a respeita (não mata num tiro só)', async t => {
+    const { clients } = await playing(t, 3);
+    const [a, b] = clients;
+    b.s.emit('state', { pos: [0, 0, 0], rotY: 0, armor: 50 }); // B com colete cheio
+    await sleep(120);
+    const kills = collect(a.s, 'playerKilled');
+    a.s.emit('shotHit', { targetId: b.init.id, dmg: 95, weapon: 'FUZIL', fromPos: [0, 0, 0] }); // 1 tiro
+    await sleep(300);
+    assert.equal(kills.length, 0, 'colete não absorveu — morreu num tiro só');
   });
 
   it('dado farm automatizado de baús, então há intervalo mínimo entre aberturas', async t => {

@@ -1247,6 +1247,7 @@
         velY: S.phase === 'FALL' ? fallVy : MP.player.vel.y,
         weapon: G.gun?.pistol ? 2 : G.gun?.pellets > 1 ? 1 : G.gun?.melee ? 3 : 0,
         shotSeq: MP.player.shotSeq,
+        armor: MP.player.armor, // alimenta o HP-espelho autoritativo do servidor
       });
     }, 100));
     const _eul = new THREE.Euler(0, 0, 0, 'YXZ');

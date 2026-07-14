@@ -283,6 +283,9 @@ function startMatch() {
     if (p.spectator) continue; // quem entrou tarde continua espectador
     p.alive = true; p.kills = 0; p.placement = 0;
     p.zoneHp = ZONE_HP; p.lastState = Date.now(); p.canDrop = true;
+    // HP AUTORITATIVO do servidor: espelha o combate pra decidir a morte aqui,
+    // não confiando no cliente da vítima (ver shotHit/serverCombatKill).
+    p.hp = 100; p.armor = 0; p.killTimes = []; p.dmgTo = new Map();
     match.aliveCount++;
   }
   io.to('br').emit('matchStart', { t0: match.t0, serverNow: Date.now(), plan: match.plan, num: match.num });
@@ -338,6 +341,42 @@ function checkVictory() {
   match.aliveCount = alive.length;
   if (alive.length === 1) endMatch(alive[0][0]);
   else if (alive.length === 0) endMatch(match.lastDead || null); // morte mútua: último a cair vence
+}
+
+/* ---------------- morte de combate DECIDIDA PELO SERVIDOR ----------------
+   Chamada só quando o HP-espelho do servidor chega a 0. É a autoridade sobre
+   quem morre em combate: um cliente adulterado não consegue nem forjar mortes
+   alheias nem se tornar imortal (o mirror ignora o que o cliente diz de vida).
+   O `died` do cliente vira só um fallback pra morte ambiental (queda/afogar). */
+function serverCombatKill(victimId, killerId, weapon) {
+  const victim = players.get(victimId);
+  if (!victim || !victim.alive || victim.spectator || match.phase !== 'PLAYING') return;
+  victim.alive = false;
+  victim.placement = match.aliveCount;
+  match.lastDead = victimId;
+  const killer = killerId && killerId !== victimId ? players.get(killerId) : null;
+  if (killer && !killer.spectator) {
+    killer.kills++;
+    // detector: ninguém abate 4+ pessoas em 1.5s de forma legítima
+    const nowK = Date.now();
+    killer.killTimes = (killer.killTimes || []).filter(t => nowK - t < 1500);
+    killer.killTimes.push(nowK);
+    if (killer.killTimes.length >= 4) {
+      const sock = io.sockets.sockets.get(killerId);
+      console.log(`[CHEAT] ${killer.nick} (${killerId}) abateu ${killer.killTimes.length} em 1.5s — expulso`);
+      if (sock) sock.disconnect(true);
+    }
+  }
+  io.emit('playerKilled', {
+    victimId, victimNick: victim.nick,
+    killerId: killer ? killerId : null, killerNick: killer ? killer.nick : null,
+    killerKills: killer ? killer.kills : 0,
+    weapon: cleanSoft(weapon).slice(0, 24) || '???',
+    byZone: false, placement: victim.placement,
+  });
+  freeCarsOf(victimId);
+  broadcastRoster();
+  checkVictory();
 }
 
 /* ---------------- destruição da cidade (relógio do servidor) ----------------
@@ -1033,6 +1072,10 @@ io.on('connection', socket => {
 
     p.pos = pos;
     p.lastState = now;
+    // armadura reportada pelo cliente: só ABATE dano recebido por ele mesmo,
+    // então clampar em [0,50] (o armorMax do jogo) é suficiente — mentir aqui
+    // no máximo dá uma defesa extra, nunca serve pra atacar/matar outros.
+    if (Number.isFinite(+d.armor)) p.armor = Math.max(0, Math.min(50, +d.armor));
     socket.volatile.broadcast.emit('playerUpdate', {
       id: socket.id, pos: p.pos, rotY: +d.rotY || 0,
       ship: !!d.ship, chute: !!d.chute, car: Number.isInteger(d.car) ? d.car : -1,
@@ -1067,12 +1110,12 @@ io.on('connection', socket => {
     p.hitWindow = p.hitWindow.filter(t => now - t < 1000);
     if (p.hitWindow.length >= 12) return;
     p.hitWindow.push(now);
-    // anti-cheat: orçamento de dano por atirador (520/s cobre o pior caso legítimo
-    // — fuzil automático só de headshot — e corta hack de dano infinito)
+    // anti-cheat: orçamento de dano por atirador (450/s cobre o pior caso
+    // legítimo — fuzil automático mirando na cabeça — e corta dano infinito)
     const dmgReq = Math.min(Math.max(+d.dmg || 0, 0), 95);
     if (dmgReq <= 0) return;
     p.dmgWindow = (p.dmgWindow || []).filter(e => now - e.t < 1000);
-    if (p.dmgWindow.reduce((a, e) => a + e.d, 0) + dmgReq > 520) return;
+    if (p.dmgWindow.reduce((a, e) => a + e.d, 0) + dmgReq > 450) return;
     p.dmgWindow.push({ t: now, d: dmgReq });
     let fromPos = [0, 0, 0];
     if (Array.isArray(d.fromPos)) {
@@ -1085,6 +1128,21 @@ io.on('connection', socket => {
       shooterId: socket.id, shooterNick: p.nick,
       weapon: cleanSoft(d.weapon).slice(0, 24) || '???',
     });
+    /* HP-espelho AUTORITATIVO: aplica o dano aqui, com a MESMA fórmula de
+       armadura do cliente (absorve 70% até a armadura quebrar), pra os dois
+       lados baterem. Quando o espelho zera, é o SERVIDOR que declara a morte —
+       não o cliente da vítima. Assim, mesmo um cliente 100% hackeado não vira
+       imortal (o mirror ignora o que ele diz de vida) nem mata mais rápido que
+       o orçamento de dano permite. */
+    if (typeof victim.hp !== 'number') victim.hp = 100;
+    let applied = dmgReq;
+    if (victim.armor > 0) {
+      const absorb = Math.min(victim.armor, applied * 0.7);
+      victim.armor -= absorb;
+      applied -= absorb;
+    }
+    victim.hp = Math.max(0, victim.hp - applied);
+    if (victim.hp <= 0) serverCombatKill(d.targetId, socket.id, d.weapon);
   });
 
   socket.on('died', (d, cb) => {
