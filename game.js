@@ -808,6 +808,7 @@ function setPaused(p) {
     if (window.__touch._editOverlay) window.__touch._editOverlay.style.display = p ? 'none' : '';
   }
 }
+window.__setPaused = setPaused;
 
 /* ================================================================
    PLAYER — controlador FPS (movimento, pulo, agachar, game feel)
@@ -1982,8 +1983,9 @@ function startGame(trusted) {
   if ((isMobileDevice() || isSmallScreen()) && document.documentElement.requestFullscreen) {
     document.documentElement.requestFullscreen().catch(() => {});
   }
-  // Empilha estado no history para o botão voltar do mobile pausar o jogo
-  if (trusted) {
+  // Pointer lock NÃO funciona no mobile — pula direto para evitar loop lock/unlock
+  const isTouch = window.__touch && window.__touch.enabled;
+  if (trusted && !isTouch && !isMobileDevice()) {
     try { controls.lock(); } catch (err) { state.lockFailed = true; }
   } else {
     state.lockFailed = true;
@@ -2000,7 +2002,9 @@ function startTraining(trusted) {
   if ((isMobileDevice() || isSmallScreen()) && document.documentElement.requestFullscreen) {
     document.documentElement.requestFullscreen().catch(() => {});
   }
-  if (trusted) {
+  // Pointer lock NÃO funciona no mobile
+  const isTouch = window.__touch && window.__touch.enabled;
+  if (trusted && !isTouch && !isMobileDevice()) {
     try { controls.lock(); } catch (err) { state.lockFailed = true; }
   } else {
     state.lockFailed = true;
@@ -2044,7 +2048,10 @@ ui.overlay.addEventListener('click', (e) => {
   if (state.started && state.paused) { // clique retoma quando pausado
     SFX.resume();
     setPaused(false);
-    if (e.isTrusted) { try { controls.lock(); } catch (err) { state.lockFailed = true; } }
+    // No mobile, não tenta pointer lock
+    const isTouch = window.__touch && window.__touch.enabled;
+    if (e.isTrusted && !isTouch && !isMobileDevice()) { try { controls.lock(); } catch (err) { state.lockFailed = true; } }
+    else { state.lockFailed = true; }
   }
 });
 

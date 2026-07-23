@@ -473,8 +473,13 @@ export class TouchControls {
     this._bindBtn('pause', {
       start: () => {
         this._pulse(this._btnPause);
-        if (document.pointerLockElement) document.exitPointerLock();
-        window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', key: 'Escape', bubbles: true }));
+        // No mobile, pointer lock não existe — chama setPaused diretamente
+        if (window.__setPaused) {
+          window.__setPaused(true);
+        } else {
+          if (document.pointerLockElement) document.exitPointerLock();
+          window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', key: 'Escape', bubbles: true }));
+        }
       },
     });
     this._bindBtn('fullscreen', {
