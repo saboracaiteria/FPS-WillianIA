@@ -1978,11 +1978,17 @@ function startGame(trusted) {
   // banner de boas-vindas é do modo solo; no BR o lobby já anuncia a partida
   setTimeout(() => { if (!window.__BR_active) showBanner('CALL OF AI<small>siga as missões · cuidado com a noite</small>', 5200); }, 700);
   setPaused(false);
+  // Fullscreen automático no mobile
+  if ((isMobileDevice() || isSmallScreen()) && document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  }
+  // Empilha estado no history para o botão voltar do mobile pausar o jogo
   if (trusted) {
     try { controls.lock(); } catch (err) { state.lockFailed = true; }
   } else {
     state.lockFailed = true;
   }
+  history.pushState({ screen: 'game' }, '');
 }
 function startTraining(trusted) {
   if (Training.active) return;
@@ -1990,11 +1996,16 @@ function startTraining(trusted) {
   state.started = true;
   Training.enter();
   setPaused(false);
+  // Fullscreen automático no mobile
+  if ((isMobileDevice() || isSmallScreen()) && document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  }
   if (trusted) {
     try { controls.lock(); } catch (err) { state.lockFailed = true; }
   } else {
     state.lockFailed = true;
   }
+  history.pushState({ screen: 'game' }, '');
 }
 /* ---- menu: botões + configurações ---- */
 $('btnNew').addEventListener('click', e => {
@@ -2036,6 +2047,46 @@ ui.overlay.addEventListener('click', (e) => {
     if (e.isTrusted) { try { controls.lock(); } catch (err) { state.lockFailed = true; } }
   }
 });
+
+/* ---- Pré-init de áudio no primeiro toque/clique no overlay (reduz travada ao iniciar) ---- */
+{
+  let audioPreInited = false;
+  const preInitAudio = () => {
+    if (audioPreInited) return;
+    audioPreInited = true;
+    try { SFX.init(); } catch (e) {}
+  };
+  ui.overlay.addEventListener('touchstart', preInitAudio, { once: true, passive: true });
+  ui.overlay.addEventListener('mousedown', preInitAudio, { once: true });
+}
+
+/* ---- Botão voltar do mobile: navega menus e pausa o jogo ---- */
+window.addEventListener('popstate', () => {
+  const settingsEl = $('settings');
+  // Configurações abertas: fecha
+  if (settingsEl && settingsEl.classList.contains('open')) {
+    settingsEl.classList.remove('open');
+    history.pushState({ screen: 'menu' }, '');
+    return;
+  }
+  // Jogo em andamento: pausa e volta ao menu
+  if (state.started && !state.paused) {
+    setPaused(true);
+    if (document.pointerLockElement) document.exitPointerLock();
+    // Sai do fullscreen se estiver
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    history.pushState({ screen: 'paused' }, '');
+    return;
+  }
+  // Jogo pausado: volta ao menu principal
+  if (state.started && state.paused) {
+    // Volta ao menu (reset do jogo seria complexo, apenas mantém pausado)
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    return;
+  }
+});
+// Empilha estado inicial para o botão voltar funcionar no menu
+history.pushState({ screen: 'menu' }, '');
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
