@@ -1,9 +1,9 @@
-/* ================================================================
-   CLIENTE BATTLE ROYALE — parte 2: lógica da partida.
-   Avatares voxel, nave alienígena, paraquedas, zona de gás, baús,
-   balística de projétil, boss sincronizado, espectador e vitória.
-   Carregado pelo multiplayer-client.js; conversa com o jogo só por
-   window.__MP / window.__game (nada do jogo é modificado aqui).
+﻿/* ================================================================
+   CLIENTE BATTLE ROYALE â€” parte 2: lÃ³gica da partida.
+   Avatares voxel, nave alienÃ­gena, paraquedas, zona de gÃ¡s, baÃºs,
+   balÃ­stica de projÃ©til, boss sincronizado, espectador e vitÃ³ria.
+   Carregado pelo multiplayer-client.js; conversa com o jogo sÃ³ por
+   window.__MP / window.__game (nada do jogo Ã© modificado aqui).
    ================================================================ */
 (function () {
   'use strict';
@@ -18,7 +18,7 @@
     const THREE = MP.THREE;
     const LIM = MP.CFG.WORLD_SIZE / 2;
     const A = G.arsenal;
-    const KNIFE = 5; // índice da faca no arsenal
+    const KNIFE = 5; // Ã­ndice da faca no arsenal
 
     /* encaminha estado do evento da cidade (o script pode bootar depois) */
     function sendCity(c) {
@@ -48,7 +48,7 @@
       return spr;
     }
 
-    /* boneco voxel low-poly: cabeça, tronco, braços, pernas + visor */
+    /* boneco voxel low-poly: cabeÃ§a, tronco, braÃ§os, pernas + visor */
     function buildVoxelBody(colors) {
       const [cBody, cCloth, cDetail, cVisor] = (colors || ['#4da6ff', '#2b3a4d', '#8a5a2b', '#ffd76a'])
         .map(c => new THREE.Color(c));
@@ -77,10 +77,10 @@
       box(mBody, 0.16, 0.6, 0.2, 0, -0.26, 0, armL);
       box(mBody, 0.16, 0.6, 0.2, 0, -0.26, 0, armR);
       visual.add(armL, armR);
-      box(mBody, 0.4, 0.38, 0.38, 0, 1.66, 0);            // cabeça
+      box(mBody, 0.4, 0.38, 0.38, 0, 1.66, 0);            // cabeÃ§a
       box(mVisor, 0.3, 0.09, 0.06, 0, 1.7, -0.21);        // visor
       box(mDetail, 0.44, 0.08, 0.42, 0, 1.87, 0);         // "capacete"
-      // paraquedas (escondido por padrão)
+      // paraquedas (escondido por padrÃ£o)
       const chute = new THREE.Group();
       const canopy = new THREE.Mesh(new THREE.SphereGeometry(1.7, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
         new THREE.MeshStandardMaterial({ color: cBody, roughness: 0.9, side: THREE.DoubleSide }));
@@ -99,7 +99,7 @@
     function makeRemote(id, nk, colors, pos) {
       const remoteColors = Array.isArray(colors) ? colors : ['#4da6ff', '#2b3a4d', '#8a5a2b', '#ffd76a'];
       const body = buildVoxelBody(remoteColors);
-      /* grupo externo é estável: interpolação, hitbox e nick não mudam
+      /* grupo externo Ã© estÃ¡vel: interpolaÃ§Ã£o, hitbox e nick nÃ£o mudam
          quando o GLB substitui o fallback. */
       const group = new THREE.Group();
       group.add(body.g);
@@ -126,7 +126,7 @@
           return this.sphCache;
         },
         damage(dmg, hitPos) {
-          if (hitPos && hitPos.y < this.group.position.y + 0.78) dmg *= 0.8; // perna dói menos
+          if (hitPos && hitPos.y < this.group.position.y + 0.78) dmg *= 0.8; // perna dÃ³i menos
           queueHit(this.id, Math.round(dmg));
           this.hitT = 0.3;
           return false; // morte confirmada pelo dono/servidor
@@ -139,7 +139,7 @@
           if (!mold) { rp.modelStatus = 'fallback'; return null; }
           const rig = mold.build({ colors: remoteColors });
           /* O jogador pode sair enquanto o GLB baixa. Nesse caso descartamos
-             apenas materiais/mixer da instância, sem tocar no molde cacheado. */
+             apenas materiais/mixer da instÃ¢ncia, sem tocar no molde cacheado. */
           if (rp.disposed || remotes.get(id) !== rp) {
             rig.dispose();
             return null;
@@ -160,8 +160,8 @@
       }
       return rp;
     }
-    /* GPU: geometrias/materiais/texturas são POR avatar — sem dispose, cada
-       jogador que entra e sai da sala vazava memória de vídeo pra sempre */
+    /* GPU: geometrias/materiais/texturas sÃ£o POR avatar â€” sem dispose, cada
+       jogador que entra e sai da sala vazava memÃ³ria de vÃ­deo pra sempre */
     function disposeGroup(g) {
       g.traverse(o => {
         if (o.geometry && !o.userData.sharedCharacterGeometry) o.geometry.dispose();
@@ -186,7 +186,7 @@
       if (i >= 0) window.__MP_remotePlayers.splice(i, 1);
     }
 
-    /* acertos agregados por alvo (escopeta = 1 mensagem, não 8) */
+    /* acertos agregados por alvo (escopeta = 1 mensagem, nÃ£o 8) */
     const pendingHits = new Map();
     let hitFlush = false;
     function queueHit(targetId, dmg) {
@@ -205,14 +205,14 @@
       });
     }
 
-    /* =============== balística (projéteis com queda) =============== */
+    /* =============== balÃ­stica (projÃ©teis com queda) =============== */
     const bullets = [];
     const _bv = new THREE.Vector3(), _bp = new THREE.Vector3();
     const _yAxis = new THREE.Vector3(0, 1, 0);
     window.__BR_takenCars = new Set();
 
-    /* dano de área (granada/bazuca) nos jogadores remotos e no boss —
-       sem isto explosivo era inútil no BR (só feria bots do modo solo) */
+    /* dano de Ã¡rea (granada/bazuca) nos jogadores remotos e no boss â€”
+       sem isto explosivo era inÃºtil no BR (sÃ³ feria bots do modo solo) */
     window.__BR_splash = function (p, radius, maxDmg) {
       for (const rp of window.__MP_remotePlayers) {
         if (!rp.alive) continue;
@@ -230,7 +230,7 @@
         drop: gun.projDrop || 6, life: 1.7, dmg: gun.dmg, laser: !!gun.laser,
       });
     };
-    function segSphere(p0, seg, segLen, c, r) { // distância ao longo do segmento ou -1
+    function segSphere(p0, seg, segLen, c, r) { // distÃ¢ncia ao longo do segmento ou -1
       _bv.copy(c).sub(p0);
       const proj = _bv.dot(seg);
       if (proj < -r || proj > segLen + r) return -1;
@@ -264,7 +264,7 @@
           bullets.splice(i, 1);
           continue;
         }
-        if (bestRp && bestD <= segLen) { // acertou alguém
+        if (bestRp && bestD <= segLen) { // acertou alguÃ©m
           _bv.copy(b.p).addScaledVector(_bp, bestD);
           MP.FX.spawnTracer(b.p, _bv, col);
           const head = bestPart === 'head' || bestPart === 'core';
@@ -305,7 +305,7 @@
       }
     };
 
-    /* =============== nave alienígena =============== */
+    /* =============== nave alienÃ­gena =============== */
     let ship = null;
     function buildShip() {
       if (G.DropShip && typeof G.DropShip.build === 'function') return G.DropShip.build();
@@ -329,9 +329,9 @@
       const beam = new THREE.PointLight(0x2dd6c4, 3.2, 60, 1.6);
       beam.position.y = -4; g.add(beam);
       /* ---- CABINE INTERNA: os jogadores viajam DENTRO da nave ----
-         parede/teto escuros (BackSide: visíveis só por dentro) e um piso
-         anelar com JANELA de vidro no centro — dá pra olhar o mapa lá embaixo
-         (o casco por baixo é face frontal → invisível de dentro, sem furo real) */
+         parede/teto escuros (BackSide: visÃ­veis sÃ³ por dentro) e um piso
+         anelar com JANELA de vidro no centro â€” dÃ¡ pra olhar o mapa lÃ¡ embaixo
+         (o casco por baixo Ã© face frontal â†’ invisÃ­vel de dentro, sem furo real) */
       const mWall = new THREE.MeshStandardMaterial({ color: 0x161d27, roughness: 0.85, metalness: 0.35, side: THREE.BackSide });
       const wall = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 2.4, 24, 1, true), mWall);
       wall.position.y = 0.2; g.add(wall);
@@ -370,8 +370,8 @@
     for (let i = 0; i < INIT.id.length; i++) seat = (seat * 31 + INIT.id.charCodeAt(i)) | 0;
     const seatOx = ((seat >>> 4) % 7 - 3) * 0.9, seatOz = ((seat >>> 8) % 7 - 3) * 0.9;
 
-    /* Câmera de inserção: orbita a nave por fora e, ao saltar, mistura a
-       última pose de terceira pessoa com a câmera FPS calculada pelo jogo. */
+    /* CÃ¢mera de inserÃ§Ã£o: orbita a nave por fora e, ao saltar, mistura a
+       Ãºltima pose de terceira pessoa com a cÃ¢mera FPS calculada pelo jogo. */
     let orbitYaw = 0, orbitPitch = 0.28, orbitDistance = 45;
     let jumpCameraStart = -Infinity;
     const jumpCameraPos = new THREE.Vector3();
@@ -435,7 +435,7 @@
       const acc = S.chuteOpen ? 26 : 34;
       fallVy = Math.max(fallVy - acc * dt, -maxFall);
       if (S.chuteOpen && fallVy < -8.5) fallVy += (Math.min(-8.5 - fallVy, 60 * dt)); // freia ao abrir
-      // deriva horizontal com WASD na direção da câmera
+      // deriva horizontal com WASD na direÃ§Ã£o da cÃ¢mera
       MP.camera.getWorldDirection(_fw); _fw.y = 0; _fw.normalize();
       _rt.set(-_fw.z, 0, _fw.x);
       _mv.set(0, 0, 0);
@@ -454,8 +454,8 @@
       if (!S.chuteOpen && P.pos.y - gy < 120) {
         S.chuteOpen = true;
         window.__BR_chuteOpen = true;
-        window.__FP_pose = 'chute'; // mãos do rig seguram as alças
-        UI.hint('🪂 paraquedas aberto — WASD pra planar', 2500);
+        window.__FP_pose = 'chute'; // mÃ£os do rig seguram as alÃ§as
+        UI.hint('ðŸª‚ paraquedas aberto â€” WASD pra planar', 2500);
       }
       if (P.pos.y <= gy + 0.4) { // pousou
         P.pos.y = gy + 0.2;
@@ -466,7 +466,7 @@
         window.__BR_freeze = false;
         window.__FP_pose = null;
         UI.hint('');
-        MP.centerMsg('Boa sorte. Ache um baú!', 2200);
+        MP.centerMsg('Boa sorte. Ache um baÃº!', 2200);
       }
     }
     function jumpFromShip() {
@@ -479,14 +479,14 @@
       jumpCameraStart = performance.now();
       jumpCameraPos.copy(MP.camera.position);
       jumpCameraQuat.copy(MP.camera.quaternion);
-      window.__FP_pose = 'fall'; // braços abertos na queda livre
-      UI.hint('🌀 caindo — [ESPAÇO] abre o paraquedas antes', 3000);
+      window.__FP_pose = 'fall'; // braÃ§os abertos na queda livre
+      UI.hint('ðŸŒ€ caindo â€” [ESPAÃ‡O] abre o paraquedas antes', 3000);
     }
 
-    /* =============== céu sincronizado: dia/noite e clima iguais pra todos ===============
-       cada cliente rodava o próprio relógio (pausa, aba oculta e slow-mo da morte
-       descolavam tudo) — aqui o horário é função pura do relógio da PARTIDA,
-       e o clima é sorteado por (seed ^ época), determinístico em todo cliente */
+    /* =============== cÃ©u sincronizado: dia/noite e clima iguais pra todos ===============
+       cada cliente rodava o prÃ³prio relÃ³gio (pausa, aba oculta e slow-mo da morte
+       descolavam tudo) â€” aqui o horÃ¡rio Ã© funÃ§Ã£o pura do relÃ³gio da PARTIDA,
+       e o clima Ã© sorteado por (seed ^ Ã©poca), determinÃ­stico em todo cliente */
     const DAY_LEN = 480, DAY_SPD = 0.62 / DAY_LEN, NIGHT_SPD = 1.9 / DAY_LEN; // espelho do Env
     function todAt(t) {
       let tod = 0.33, rem = Math.max(0, t);
@@ -501,7 +501,7 @@
       }
       return tod % 1;
     }
-    let skyAcc = 9; // força a 1ª sincronização de clima logo de cara
+    let skyAcc = 9; // forÃ§a a 1Âª sincronizaÃ§Ã£o de clima logo de cara
     function skySync(dt) {
       if (!S.plan || !MP.state.started) return;
       const ciclo = S.flags && S.flags.ciclo;
@@ -516,7 +516,7 @@
       }
     }
 
-    /* =============== zona de gás =============== */
+    /* =============== zona de gÃ¡s =============== */
     let zoneWall = null;
     const zc = { x: 0, z: 0, r: 9999, nx: 0, nz: 0, nr: 9999, dps: 0, label: '', closesIn: 0, shrinking: false, started: false };
     function buildZoneWall() {
@@ -537,12 +537,12 @@
         if (t < p.tWaitEnd) { cur = p; break; }
         if (t < p.tShrinkEnd) { cur = p; shrinking = true; k = (t - p.tWaitEnd) / (p.tShrinkEnd - p.tWaitEnd); break; }
       }
-      if (!cur) { // depois da última fase: círculo final parado
+      if (!cur) { // depois da Ãºltima fase: cÃ­rculo final parado
         const last = ph[ph.length - 1];
         zc.x = last.nx; zc.z = last.nz; zc.r = last.r1;
         zc.nx = last.nx; zc.nz = last.nz; zc.nr = last.r1;
         zc.dps = last.dps + 3;
-        zc.label = '☠ ZONA FINAL';
+        zc.label = 'â˜  ZONA FINAL';
         zc.shrinking = false;
         return;
       }
@@ -550,12 +550,12 @@
         zc.x = cur.cx + (cur.nx - cur.cx) * k;
         zc.z = cur.cz + (cur.nz - cur.cz) * k;
         zc.r = cur.r0 + (cur.r1 - cur.r0) * k;
-        zc.label = '⚠ ZONA FECHANDO';
+        zc.label = 'âš  ZONA FECHANDO';
       } else {
         zc.x = cur.cx; zc.z = cur.cz; zc.r = cur.r0;
         zc.closesIn = Math.max(0, cur.tWaitEnd - t);
         const m = Math.floor(zc.closesIn / 60), s = Math.floor(zc.closesIn % 60);
-        zc.label = `⭘ zona fecha em ${m}:${String(s).padStart(2, '0')}`;
+        zc.label = `â­˜ zona fecha em ${m}:${String(s).padStart(2, '0')}`;
       }
       zc.nx = cur.nx; zc.nz = cur.nz; zc.nr = cur.r1;
       zc.dps = cur.dps;
@@ -568,41 +568,26 @@
       const P = MP.player.pos;
       const fora = S.plan && Math.hypot(P.x - zc.x, P.z - zc.z) > zc.r;
       c2.clearRect(0, 0, Ssz, Ssz);
-      // fundo: avermelha quando VOCÊ está fora da safe
+      // fundo: avermelha quando VOCÃŠ estÃ¡ fora da safe
       c2.fillStyle = fora && S.phase === 'PLAY' ? 'rgba(70,18,14,.9)' : 'rgba(20,30,26,.85)';
       c2.fillRect(0, 0, Ssz, Ssz);
       if (S.plan) {
-        // área SAFE preenchida (clara) + borda branca
+        // Ã¡rea SAFE preenchida (clara) + borda branca
         c2.fillStyle = 'rgba(160,255,190,.14)';
         c2.beginPath(); c2.arc(W(zc.x), W(zc.z), zc.r / (2 * LIM) * Ssz, 0, Math.PI * 2); c2.fill();
         c2.strokeStyle = 'rgba(255,255,255,.9)'; c2.lineWidth = 1.6;
         c2.beginPath(); c2.arc(W(zc.x), W(zc.z), zc.r / (2 * LIM) * Ssz, 0, Math.PI * 2); c2.stroke();
-        c2.strokeStyle = 'rgba(126,224,129,.95)'; c2.lineWidth = 1.3;
-        c2.beginPath(); c2.arc(W(zc.nx), W(zc.nz), zc.nr / (2 * LIM) * Ssz, 0, Math.PI * 2); c2.stroke();
-        if (S.phase === 'SHIP' || S.phase === 'FALL') { // rota da nave
-          c2.strokeStyle = 'rgba(45,214,196,.7)';
-          c2.setLineDash([3, 3]);
-          c2.beginPath();
-          c2.moveTo(W(S.plan.ship.from[0]), W(S.plan.ship.from[1]));
-          c2.lineTo(W(S.plan.ship.to[0]), W(S.plan.ship.to[1]));
-          c2.stroke();
-          c2.setLineDash([]);
-        }
-        if (fora) { // seta VOCÊ → safe (caminho mais curto)
-          const ang = Math.atan2(zc.z - P.z, zc.x - P.x);
-          const px = W(P.x), pz = W(P.z);
-          const bx = W(zc.x + Math.cos(ang + Math.PI) * zc.r), bz = W(zc.z + Math.sin(ang + Math.PI) * zc.r);
-          c2.strokeStyle = 'rgba(255,90,70,.95)'; c2.lineWidth = 2;
-          c2.setLineDash([4, 3]);
-          c2.beginPath(); c2.moveTo(px, pz); c2.lineTo(bx, bz); c2.stroke();
-          c2.setLineDash([]);
-        }
+        // seta indicando o centro da próxima zona
+        const px = zc.x, pz = zc.z, bx = zc.nx, bz = zc.nz;
+        c2.setLineDash([4, 3]);
+        c2.beginPath(); c2.moveTo(W(px), W(pz)); c2.lineTo(W(bx), W(bz)); c2.stroke();
+        c2.setLineDash([]);
       }
       if (boss && boss.alive) {
         c2.fillStyle = '#ffb03c';
         c2.fillRect(W(boss.group.position.x) - 2.5, W(boss.group.position.z) - 2.5, 5, 5);
       }
-      // VOCÊ: triângulo apontando pra onde a câmera olha, com contorno
+      // VOCÃŠ: triÃ¢ngulo apontando pra onde a cÃ¢mera olha, com contorno
       _eul.setFromQuaternion(MP.camera.quaternion);
       const yaw = -_eul.y; // canvas: +z pra baixo
       c2.save();
@@ -615,7 +600,7 @@
       c2.restore();
     }
 
-    /* =============== baús =============== */
+    /* =============== baÃºs =============== */
     const crates = [];
     function buildCrates() {
       const rng = seededRng(INIT.worldSeed ^ 0xC0FFEE);
@@ -648,7 +633,7 @@
         if (MP.slopeAt(x, z) > 0.5) continue;
         if (addCrate('c' + placed, x, z)) placed++;
       }
-      // garantidos nos pontos de interesse (cidade, base, cabanas…)
+      // garantidos nos pontos de interesse (cidade, base, cabanasâ€¦)
       let si = 0;
       for (const s of (G.Structures.sites || [])) {
         addCrate('s' + si++, s.x + 2.2, s.z + 1.4);
@@ -684,22 +669,22 @@
           if (w.locked) { w.locked = false; w.mag = w.magSize; }
           w.reserve += it.ammo || 0;
           MP.updateSlotsHUD();
-          UI.toast(`🔫 ${esc(w.name)} · ${esc(it.rarity || 'comum')}`, it.rarity);
+          UI.toast(`ðŸ”« ${esc(w.name)} Â· ${esc(it.rarity || 'comum')}`, it.rarity);
           if (G.gun && G.gun.melee) G.switchWeapon(it.weapon);
         } else if (it.type === 'ammo') {
           const w = (G.gun && !G.gun.melee) ? G.gun : A.find(w => !w.locked && !w.melee);
-          if (w) { w.reserve += it.amount || 30; UI.toast(`📦 +${it.amount || 30} munição`, 'comum'); }
+          if (w) { w.reserve += it.amount || 30; UI.toast(`ðŸ“¦ +${it.amount || 30} muniÃ§Ã£o`, 'comum'); }
         } else if (it.type === 'med') {
           if (inv.medkits < inv.medkitsMax) inv.medkits++;
           else P.healPool += 30;
-          UI.toast('✚ kit médico', 'incomum');
+          UI.toast('âœš kit mÃ©dico', 'incomum');
         } else if (it.type === 'armor') {
           P.armor = Math.min(P.armorMax, P.armor + (it.amount || 50));
           MP.updateArmorHUD();
-          UI.toast(`🛡 +${it.amount || 50} armadura`, 'raro');
+          UI.toast(`ðŸ›¡ +${it.amount || 50} armadura`, 'raro');
         } else if (it.type === 'nade') {
           if (inv.nades < inv.nadesMax) inv.nades++;
-          UI.toast('● granada', 'comum');
+          UI.toast('â— granada', 'comum');
         }
       }
       MP.updateAmmoHUD(); MP.updateInvHUD();
@@ -712,7 +697,7 @@
       socket.timeout(3000).emit('openChest', { key: c.key }, (err, res) => {
         if (err || !res || !res.ok) { if (res && res.opened) markOpened(c.key); return; }
         markOpened(c.key);
-        applyItems(res.items, 'baú aberto');
+        applyItems(res.items, 'baÃº aberto');
       });
     }
 
@@ -726,7 +711,7 @@
       const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.4, 26, 8, 1, true),
         new THREE.MeshBasicMaterial({ color: 0x5ab0ff, transparent: true, opacity: 0.35, depthWrite: false }));
       beam.position.y = 13; g.add(beam);
-      // groundAt respeita andares/telhados — morrer no 3º andar deixa o loot LÁ
+      // groundAt respeita andares/telhados â€” morrer no 3Âº andar deixa o loot LÃ
       const y = MP.groundAt(pos[0], pos[2], (pos[1] || 0) + 1);
       g.position.set(pos[0], y, pos[2]);
       MP.scene.add(g);
@@ -738,7 +723,7 @@
     }
     for (const d of INIT.drops || []) spawnDrop(d.id, d.pos);
 
-    /* =============== BOSS — golem sincronizado =============== */
+    /* =============== BOSS â€” golem sincronizado =============== */
     let boss = null;
     let bossHp = INIT.bossHp || 0, bossMaxHp = INIT.bossMaxHp || 1;
     let bossDeadFlag = !!INIT.bossDead; // resetado a cada matchStart
@@ -761,13 +746,13 @@
       box(mRock, 2.6, 2.2, 1.6, 0, 3.1, 0);           // tronco
       box(mMoss, 2.7, 0.5, 1.7, 0, 4.1, 0);           // ombros musgo
       const core = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 9), mCore);
-      core.position.set(0, 3.1, -0.85); g.add(core);  // núcleo (ponto fraco)
+      core.position.set(0, 3.1, -0.85); g.add(core);  // nÃºcleo (ponto fraco)
       const armL = new THREE.Group(), armR = new THREE.Group();
       armL.position.set(-1.7, 3.9, 0); armR.position.set(1.7, 3.9, 0);
       box(mRock, 0.8, 2.6, 1, 0, -1.3, 0, armL);
       box(mRock, 0.8, 2.6, 1, 0, -1.3, 0, armR);
       g.add(armL, armR);
-      box(mRock, 1.3, 1.1, 1.2, 0, 4.9, 0);           // cabeça
+      box(mRock, 1.3, 1.1, 1.2, 0, 4.9, 0);           // cabeÃ§a
       box(mCore.clone(), 0.7, 0.16, 0.1, 0, 5, -0.62); // olhos
       MP.scene.add(g);
       boss = {
@@ -789,7 +774,7 @@
         },
         damage(dmg, hitPos) {
           socket.emit('bossHit', { dmg: Math.round(dmg) });
-          bossHp = Math.max(0, bossHp - dmg); // predição local
+          bossHp = Math.max(0, bossHp - dmg); // prediÃ§Ã£o local
           return false;
         },
       };
@@ -813,7 +798,7 @@
       const bx = F.x + Math.cos(a) * 26, bz = F.z + Math.sin(a) * 26;
       const by = MP.heightAt(bx, bz);
       boss.group.position.set(bx, by, bz);
-      const fwx = -Math.sin(a), fwz = Math.cos(a); // tangente do círculo
+      const fwx = -Math.sin(a), fwz = Math.cos(a); // tangente do cÃ­rculo
       boss.fw = { x: fwx, z: fwz };
       boss.group.rotation.y = Math.atan2(fwx, fwz);
       const ph = t * 2.2;
@@ -823,7 +808,7 @@
       boss.armR.rotation.x = Math.sin(ph) * 0.3;
       if (boss.slamT > 0) { boss.slamT -= dt; boss.armL.rotation.x = boss.armR.rotation.x = -2 + boss.slamT * 4; }
       boss.core.material.emissiveIntensity = 2.4 + Math.sin(t * 5) * 0.8;
-      // ataque de área
+      // ataque de Ã¡rea
       const P = MP.player.pos;
       const d = Math.hypot(P.x - bx, P.z - bz);
       if (S.phase === 'PLAY' && !MP.player.dead && d < 8 && t - lastAoE > 2.2) {
@@ -837,7 +822,7 @@
       if (near) UI.bossFill.style.width = (bossHp / bossMaxHp * 100) + '%';
     }
 
-    /* continua abaixo: espectador, morte, vitória, eventos, loops */
+    /* continua abaixo: espectador, morte, vitÃ³ria, eventos, loops */
     require2();
 
     /* =============== espectador =============== */
@@ -865,13 +850,13 @@
       const list = aliveTargets();
       const cur = list.length ? list[spectIdx % list.length] : null;
       UI.spectBar.innerHTML = cur
-        ? `👁 ESPECTANDO <b>${esc(cur.nick)}</b> · [ESPAÇO] troca · ${list.length} vivos`
-        : '👁 ESPECTADOR · aguardando o fim da partida';
+        ? `ðŸ‘ ESPECTANDO <b>${esc(cur.nick)}</b> Â· [ESPAÃ‡O] troca Â· ${list.length} vivos`
+        : 'ðŸ‘ ESPECTADOR Â· aguardando o fim da partida';
     }
     function spectStep() {
       const list = aliveTargets();
       const P = MP.player;
-      if (!list.length) { // ninguém pra assistir: paira sobre a zona
+      if (!list.length) { // ninguÃ©m pra assistir: paira sobre a zona
         P.pos.set(zc.x, Math.max(MP.heightAt(zc.x, zc.z) + 40, 40), zc.z + zc.r * 0.4);
         return;
       }
@@ -884,15 +869,15 @@
       if (P.pos.y < gy + 0.6) P.pos.y = gy + 0.6;
     }
 
-    /* =============== morte → recap → espectador =============== */
+    /* =============== morte â†’ recap â†’ espectador =============== */
     let myDeathInfo = null; // preenchido pelo playerKilled (victim == eu)
     let forceDeath = false; // servidor me matou (zona/AFK): aplica na primeira chance
-    window.__MP_respawn = function () { // chamado pelo jogo 3.6s após a morte
+    window.__MP_respawn = function () { // chamado pelo jogo 3.6s apÃ³s a morte
       MP.setTimeScale(1);
-      // morreu dirigindo/voando: sai do veículo, senão a câmera fica presa no carro no espectador
+      // morreu dirigindo/voando: sai do veÃ­culo, senÃ£o a cÃ¢mera fica presa no carro no espectador
       try { if (G.state.driving || G.state.flying) G.tryToggleCar(); } catch (e) {}
       const killer = S.lastHit && Date.now() - S.lastHit.t < 9000 ? S.lastHit : null;
-      // solta o loot no chão pros outros: armas + munição + colete + kit
+      // solta o loot no chÃ£o pros outros: armas + muniÃ§Ã£o + colete + kit
       const items = [];
       for (let i = 0; i < A.length; i++) if (!A[i].melee && !A[i].locked)
         items.push({ type: 'weapon', weapon: i, ammo: A[i].mag + A[i].reserve, rarity: 'raro' });
@@ -903,7 +888,7 @@
       socket.timeout(3000).emit('died',
         { killerId: killer ? killer.shooterId : null, weapon: killer ? killer.weapon : null, byZone: !killer },
         (err, res) => { if (!err && res && res.placement) S.myPlacement = res.placement; showRecap(); });
-      setTimeout(showRecap, 1500); // garantia caso o ack não venha
+      setTimeout(showRecap, 1500); // garantia caso o ack nÃ£o venha
     };
     // o jogo checa esta flag na morte: sem ela, cairia no location.reload() do solo
     // e a morte nunca seria reportada ao servidor (kill perdida + fantasma na partida)
@@ -915,18 +900,18 @@
       const di = myDeathInfo;
       const who = di && di.killerNick
         ? `eliminado por <b style="color:#ffd76a">${esc(di.killerNick)}</b> com <b>${esc(di.weapon)}</b> (${di.killerKills} kills)`
-        : (di && di.byZone ? 'o <b style="color:#7ee081">GÁS</b> te pegou' : 'você caiu em combate');
+        : (di && di.byZone ? 'o <b style="color:#7ee081">GÃS</b> te pegou' : 'vocÃª caiu em combate');
       LOBBY.overlay(`
-        <div class="brTitle" style="color:#ff6b57">☠ VOCÊ FOI ELIMINADO</div>
+        <div class="brTitle" style="color:#ff6b57">â˜  VOCÃŠ FOI ELIMINADO</div>
         <div class="brSub">PARTIDA #${S.matchNum}</div>
         <div style="text-align:center;font-size:17px;margin:14px 0">${who}</div>
         <div style="text-align:center;font-size:15px;opacity:.85">
-          colocação <b style="color:#ffd76a">#${S.myPlacement || '—'}</b> · suas kills: <b>${S.myKills}</b></div>
+          colocaÃ§Ã£o <b style="color:#ffd76a">#${S.myPlacement || 'â€”'}</b> Â· suas kills: <b>${S.myKills}</b></div>
         <div style="text-align:center;font-size:12px;opacity:.6;margin-top:14px">entrando como espectador...</div>`);
       setTimeout(() => { if (!disposed && S.phase !== 'ENDED') enterSpectator(); }, 4200);
     }
 
-    /* =============== começo de partida =============== */
+    /* =============== comeÃ§o de partida =============== */
     function disableSoloAI() {
       try {
         for (const e of G.Enemies.list) { e.alive = false; if (e.group) e.group.visible = false; }
@@ -939,7 +924,7 @@
         A[i].locked = i !== KNIFE;
         if (!A[i].melee) { A[i].reserve = 0; A[i].mag = A[i].magSize; }
       }
-      // balística BR (projéteis com queda) — fuzil, DMR, plasma e sniper leve
+      // balÃ­stica BR (projÃ©teis com queda) â€” fuzil, DMR, plasma e sniper leve
       A[0].projSpeed = 200; A[0].projDrop = 6.5;
       A[2].projSpeed = 310; A[2].projDrop = 5;
       A[4].projSpeed = 120; A[4].projDrop = 1.5;
@@ -960,7 +945,7 @@
       disableSoloAI();
       if (S.flags && !S.flags.animais) { // regra da sala: sem bichos
         try { for (const a of G.Animals.list) { a.alive = false; if (a.group) a.group.visible = false; } }
-        catch (e) { /* módulo ausente: segue */ }
+        catch (e) { /* mÃ³dulo ausente: segue */ }
       }
       buildZoneWall();
       buildCrates();
@@ -969,7 +954,7 @@
       UI.showHud(true);
       if (asSpectator) {
         enterSpectator();
-        MP.centerMsg('Partida em andamento — você entra na próxima!', 3200);
+        MP.centerMsg('Partida em andamento â€” vocÃª entra na prÃ³xima!', 3200);
       } else {
         setupLoadout();
         S.phase = 'SHIP';
@@ -977,7 +962,7 @@
         window.__BR_chuteOpen = false;
         window.__BR_freeze = true;
         MP.player.invulnUntil = MP.state.gameTime + 6;
-        UI.hint('🛸 NA NAVE — mova o mouse para orbitar · [ESPAÇO] para pular');
+        UI.hint('ðŸ›¸ NA NAVE â€” mova o mouse para orbitar Â· [ESPAÃ‡O] para pular');
       }
       hintLock();
     }
@@ -985,7 +970,7 @@
       if (!MP.state.pointerLocked) MP.centerMsg('clique na tela pra capturar o mouse', 2600);
     }
     document.addEventListener('click', e => {
-      // autoplay do navegador deixa o AudioContext suspenso até um gesto —
+      // autoplay do navegador deixa o AudioContext suspenso atÃ© um gesto â€”
       // sem isto a partida (iniciada via socket, sem clique) ficava MUDA
       try { MP.SFX.init(); MP.SFX.resume(); } catch (err) {}
       if (S.chatOpen || e.target.closest('.brPanel') || e.target.closest('#brChatInput')) return;
@@ -1010,7 +995,7 @@
         S.clockOffset = d.serverNow - Date.now() + (S.halfRtt || 0);
       S.matchNum = d.num;
       S.myKills = 0; S.myPlacement = 0; recapShown = false; myDeathInfo = null;
-      bossDeadFlag = !S.flags.golem; // GOLEM desligado pela regra da sala: nem constrói
+      bossDeadFlag = !S.flags.golem; // GOLEM desligado pela regra da sala: nem constrÃ³i
       window.__BR_zumbis = !!S.flags.zumbis;
       sendCity(d.plan.city ? { ...d.plan.city, state: 'intact' } : null);
       bossHp = bossMaxHp = d.plan.boss.hp;
@@ -1021,9 +1006,9 @@
       S.aliveCount = d.aliveCount;
       LOBBY.setRoster(d.players);
       const alive = d.players.filter(p => p.alive).sort((a, b) => b.kills - a.kills);
-      UI.rosterBox.innerHTML = '<div style="opacity:.6;font-size:9.5px;letter-spacing:2px">VIVOS · KILLS</div>' +
+      UI.rosterBox.innerHTML = '<div style="opacity:.6;font-size:9.5px;letter-spacing:2px">VIVOS Â· KILLS</div>' +
         alive.slice(0, 5).map(p =>
-          `<div class="${p.id === INIT.id ? 'me' : ''}">${esc(p.nick)} <b style="float:right">☠${p.kills}</b></div>`).join('');
+          `<div class="${p.id === INIT.id ? 'me' : ''}">${esc(p.nick)} <b style="float:right">â˜ ${p.kills}</b></div>`).join('');
       for (const p of d.players) { // marca avatares de mortos
         const rp = remotes.get(p.id);
         if (rp) rp.alive = p.alive;
@@ -1056,25 +1041,25 @@
     });
     socket.on('playerKilled', d => {
       const feed = d.byCity
-        ? `☄ <b>${esc(d.victimNick)}</b> morreu no ataque de mísseis à cidade`
+        ? `â˜„ <b>${esc(d.victimNick)}</b> morreu no ataque de mÃ­sseis Ã  cidade`
         : d.byZone
-          ? `☣ <b>${esc(d.victimNick)}</b> morreu pro gás`
-          : `<b>${esc(d.killerNick || '???')}</b> ▸ ${esc(d.victimNick)} <i style="opacity:.6">${esc(d.weapon)}</i>`;
+          ? `â˜£ <b>${esc(d.victimNick)}</b> morreu pro gÃ¡s`
+          : `<b>${esc(d.killerNick || '???')}</b> â–¸ ${esc(d.victimNick)} <i style="opacity:.6">${esc(d.weapon)}</i>`;
       MP.addKillFeed(feed);
       if (d.victimId === INIT.id) {
         myDeathInfo = d;
         S.myPlacement = d.placement || S.myPlacement;
-        if (d.byCity) { // morto pelo ataque de mísseis: mensagem oficial da vítima
+        if (d.byCity) { // morto pelo ataque de mÃ­sseis: mensagem oficial da vÃ­tima
           const ds = document.getElementById('deathSub');
-          if (ds) ds.textContent = 'Você morreu atingido pelo ataque de mísseis próximo à cidade!';
+          if (ds) ds.textContent = 'VocÃª morreu atingido pelo ataque de mÃ­sseis prÃ³ximo Ã  cidade!';
         }
-        // servidor me eliminou (zona/AFK/mísseis) mas meu cliente ainda me acha vivo:
-        // força a morte local, senão viro fantasma jogando numa partida onde já morri
+        // servidor me eliminou (zona/AFK/mÃ­sseis) mas meu cliente ainda me acha vivo:
+        // forÃ§a a morte local, senÃ£o viro fantasma jogando numa partida onde jÃ¡ morri
         if (!MP.player.dead && (S.phase === 'PLAY' || S.phase === 'FALL' || S.phase === 'SHIP')) forceDeath = true;
       }
       if (d.killerId === INIT.id) {
         S.myKills = d.killerKills;
-        UI.toast(`☠ você eliminou <b>${esc(d.victimNick)}</b>!`, 'épico');
+        UI.toast(`â˜  vocÃª eliminou <b>${esc(d.victimNick)}</b>!`, 'Ã©pico');
         MP.SFX.kill();
       }
       const rp = remotes.get(d.victimId);
@@ -1092,7 +1077,7 @@
         boss.alive = false;
         const p = boss.group.position;
         MP.FX.burst(p.clone().setY(p.y + 3), new THREE.Vector3(0, 1, 0), 'spark');
-        // baú lendário no lugar
+        // baÃº lendÃ¡rio no lugar
         setTimeout(() => {
           const y = MP.heightAt(p.x, p.z);
           const mBox = new THREE.MeshStandardMaterial({ color: 0x5b4630, roughness: 0.7 });
@@ -1106,7 +1091,7 @@
           crates.push({ key: 'boss', g: grp, lid, band, opened: false, x: p.x, z: p.z });
         }, 2200);
       }
-      MP.addKillFeed(`⛰ <b>${esc(d.by)}</b> derrotou o GOLEM`);
+      MP.addKillFeed(`â›° <b>${esc(d.by)}</b> derrotou o GOLEM`);
     });
     socket.on('chat', d => UI.addChat(d.nick, d.msg, d.sys));
     socket.on('matchEnd', d => {
@@ -1115,29 +1100,29 @@
       UI.spectBar.style.display = 'none';
       UI.hint('');
       const won = d.winner && d.winner.id === INIT.id;
-      // estatísticas pessoais no navegador (espelho do ranking)
+      // estatÃ­sticas pessoais no navegador (espelho do ranking)
       try {
         const st = JSON.parse(localStorage.getItem('br_stats') || '{"wins":0,"kills":0,"matches":0}');
         st.matches++; st.kills += S.myKills; if (won) st.wins++;
         localStorage.setItem('br_stats', JSON.stringify(st));
       } catch (e) {}
       const rows = d.ranking.map(r =>
-        `<tr><td>#${r.placement}</td><td>${esc(r.nick)}</td><td>☠ ${r.kills}</td></tr>`).join('');
+        `<tr><td>#${r.placement}</td><td>${esc(r.nick)}</td><td>â˜  ${r.kills}</td></tr>`).join('');
       LOBBY.overlay(`
-        <div class="brTitle" style="${won ? '' : 'color:#e8f1f8'}">${won ? '🏆 VITÓRIA MAGISTRAL!' : '🏆 FIM DE PARTIDA'}</div>
+        <div class="brTitle" style="${won ? '' : 'color:#e8f1f8'}">${won ? 'ðŸ† VITÃ“RIA MAGISTRAL!' : 'ðŸ† FIM DE PARTIDA'}</div>
         <div class="brSub">PARTIDA #${S.matchNum}</div>
         <div style="text-align:center;font-size:19px;margin:10px 0">
-          vencedor: <b style="color:#ffd76a">${d.winner ? esc(d.winner.nick) : '—'}</b>
-          ${d.winner ? `· ${d.winner.kills} kills` : ''}</div>
+          vencedor: <b style="color:#ffd76a">${d.winner ? esc(d.winner.nick) : 'â€”'}</b>
+          ${d.winner ? `Â· ${d.winner.kills} kills` : ''}</div>
         <div class="brRow"><div class="brCol">
           <div class="brH">RANKING DA PARTIDA</div>
           <table class="brTable"><tr><th>#</th><th>nick</th><th>kills</th></tr>${rows}</table>
         </div><div class="brCol">
-          <div class="brH">🏆 RANKING GLOBAL</div>
+          <div class="brH">ðŸ† RANKING GLOBAL</div>
           <table class="brTable" id="brGlobalTable"></table>
         </div></div>
         <div style="text-align:center;margin-top:16px;font-size:13px;opacity:.75">
-          próxima partida (mapa novo) em <b id="brNextIn">${d.nextIn}</b>s...</div>`);
+          prÃ³xima partida (mapa novo) em <b id="brNextIn">${d.nextIn}</b>s...</div>`);
       LOBBY.renderGlobal(d.globalTop);
       let n = d.nextIn;
       const iv = setInterval(() => {
@@ -1167,7 +1152,7 @@
     }
     window.addEventListener('keydown', e => { // roda DEPOIS do listener do jogo
       if (S.chatOpen) {
-        G.keys[e.code] = false;               // não deixa o jogo andar/atirar digitando
+        G.keys[e.code] = false;               // nÃ£o deixa o jogo andar/atirar digitando
         if (MP.justPressed) MP.justPressed.delete(e.code);
         if (e.code === 'Enter') closeChat(true);
         if (e.code === 'Escape') closeChat(false);
@@ -1180,7 +1165,7 @@
           S.chuteOpen = true;
           window.__BR_chuteOpen = true;
           window.__FP_pose = 'chute';
-          UI.hint('🪂 paraquedas aberto', 1800);
+          UI.hint('ðŸª‚ paraquedas aberto', 1800);
         }
         else if (S.phase === 'SPECT') { spectIdx++; updateSpectBar(); }
       }
@@ -1194,7 +1179,7 @@
       }
     });
 
-    /* posse de veículo arbitrada no servidor (mata a corrida do "mesmo carro") */
+    /* posse de veÃ­culo arbitrada no servidor (mata a corrida do "mesmo carro") */
     let myCarClaim = -1;
     function claimCar(idx) {
       myCarClaim = idx;
@@ -1202,7 +1187,7 @@
         if (err || !res || !res.ok) {
           if (G.state.driving && myCarClaim === idx) {
             G.tryToggleCar();
-            MP.centerMsg('Veículo ocupado!', 1500);
+            MP.centerMsg('VeÃ­culo ocupado!', 1500);
           }
           myCarClaim = -1;
         }
@@ -1211,7 +1196,7 @@
     socket.on('carTaken', d => { // outro levou o carro que estou tentando usar
       if (d.id !== INIT.id && G.state.driving && myCarClaim === d.idx) {
         G.tryToggleCar();
-        MP.centerMsg('Veículo ocupado!', 1500);
+        MP.centerMsg('VeÃ­culo ocupado!', 1500);
         myCarClaim = -1;
       }
     });
@@ -1221,12 +1206,12 @@
       if (!window.__BR_active || !MP.state.started || MP.state.paused) return;
       if (S.phase === 'SPECT' || S.phase === 'ENDED' || MP.player.dead) return;
       let p = MP.player.pos, rotY, car = -1, heli = false;
-      if (G.state.driving) { // dentro de carro: manda a pose do VEÍCULO, não a do boneco
+      if (G.state.driving) { // dentro de carro: manda a pose do VEÃCULO, nÃ£o a do boneco
         car = G.Car.vehicles.findIndex(v => v.group === G.Car.group);
         p = G.Car.group.position;
         _eul.setFromQuaternion(G.Car.group.quaternion);
         rotY = _eul.y;
-      } else if (G.state.flying) { // no helicóptero: idem (antes o boneco ficava no chão)
+      } else if (G.state.flying) { // no helicÃ³ptero: idem (antes o boneco ficava no chÃ£o)
         heli = true;
         p = G.Heli.group.position;
         rotY = G.Heli.group.rotation.y;
@@ -1234,7 +1219,7 @@
         _eul.setFromQuaternion(MP.camera.quaternion);
         rotY = _eul.y;
       }
-      // transições de posse (só em partida; no solo o servidor recusaria)
+      // transiÃ§Ãµes de posse (sÃ³ em partida; no solo o servidor recusaria)
       if (S.phase === 'PLAY') {
         if (car >= 0 && myCarClaim !== car) claimCar(car);
         else if (car < 0 && myCarClaim >= 0) { socket.emit('leaveCar', { idx: myCarClaim }); myCarClaim = -1; }
@@ -1253,10 +1238,10 @@
     const _eul = new THREE.Euler(0, 0, 0, 'YXZ');
 
     /* watchdog de aba oculta: o loop de frames congela quando o navegador some
-       da tela — sem isto o jogador ficava eterno "na nave"/no ar, imortal fora
+       da tela â€” sem isto o jogador ficava eterno "na nave"/no ar, imortal fora
        da zona, e a partida nunca terminava. Aqui, em setInterval (roda mesmo
-       em segundo plano): pulo automático, queda grosseira até o chão e o dano
-       do gás continuam acontecendo. */
+       em segundo plano): pulo automÃ¡tico, queda grosseira atÃ© o chÃ£o e o dano
+       do gÃ¡s continuam acontecendo. */
     let lastRaf = performance.now();
     intervalIds.push(setInterval(() => {
       if (S.phase === 'SHIP' && S.plan && S.matchT() >= S.plan.ship.flyTime) jumpFromShip();
@@ -1279,7 +1264,7 @@
       const nowMs = performance.now();
       const dt = Math.min((nowMs - lastT) / 1000, 0.1);
       lastT = nowMs;
-      lastRaf = nowMs; // sinal de "aba visível" pro watchdog de segundo plano
+      lastRaf = nowMs; // sinal de "aba visÃ­vel" pro watchdog de segundo plano
       if (!window.__BR_active) return;
 
       /* morte decretada pelo servidor: aplica assim que o jogo deixar */
@@ -1290,11 +1275,11 @@
         if (MP.player.dead) forceDeath = false;
       }
 
-      /* na nave/queda ninguém pode ser abatido (invulnerabilidade rolante) */
+      /* na nave/queda ninguÃ©m pode ser abatido (invulnerabilidade rolante) */
       if ((S.phase === 'SHIP' || S.phase === 'FALL') && !MP.player.dead && !forceDeath)
         MP.player.invulnUntil = MP.state.gameTime + 1;
 
-      /* avatares: interpolação + animação de corrida + paraquedas + morte */
+      /* avatares: interpolaÃ§Ã£o + animaÃ§Ã£o de corrida + paraquedas + morte */
       const k = 1 - Math.exp(-12 * dt);
       window.__BR_takenCars.clear(); // carros ocupados por remotos (bloqueia tecla E neles)
       window.__BR_heliTaken = false;
@@ -1315,7 +1300,7 @@
           }
           continue;
         }
-        // visível também na nave (todo mundo viaja no convés); some dentro de carro/heli
+        // visÃ­vel tambÃ©m na nave (todo mundo viaja no convÃ©s); some dentro de carro/heli
         rp.group.visible = rp.alive && rp.car < 0 && !rp.heli;
         rp.group.position.lerp(rp.targetPos, k);
         let dy = rp.targetYaw - rp.yaw;
@@ -1355,14 +1340,14 @@
             v.chassisBody.quaternion.setFromAxisAngle(_yAxis, rp.yaw);
           }
         }
-        // voando: o helicóptero (único no mapa) segue o piloto remoto
+        // voando: o helicÃ³ptero (Ãºnico no mapa) segue o piloto remoto
         if (rp.heli && !G.state.flying) {
           G.Heli.group.position.copy(rp.group.position);
           G.Heli.group.rotation.set(0, rp.yaw, 0);
         }
       }
 
-      /* corpo a corpo: não dá pra atravessar outro jogador vivo */
+      /* corpo a corpo: nÃ£o dÃ¡ pra atravessar outro jogador vivo */
       if (S.phase === 'PLAY' && !MP.player.dead && !window.__BR_freeze) {
         const P = MP.player.pos;
         for (const rp of remotes.values()) {
@@ -1389,11 +1374,11 @@
         const sp = S.plan.ship;
         ship.g.rotation.y = Math.atan2(sp.to[0] - sp.from[0], sp.to[1] - sp.from[1]);
         if (S.phase === 'SHIP') {
-          // DENTRO da cabine: pés no piso interno, todo mundo ao redor da janela
+          // DENTRO da cabine: pÃ©s no piso interno, todo mundo ao redor da janela
           MP.player.pos.set(_shipV.x + seatOx, _shipV.y - 0.95, _shipV.z + seatOz);
           MP.player.vel.set(0, 0, 0);
           if (tm >= sp.flyTime) jumpFromShip(); // fim da rota: todo mundo pula
-          UI.hint(`🛸 mova o mouse para orbitar · [ESPAÇO] para pular · auto em ${Math.max(0, sp.flyTime - tm).toFixed(0)}s`);
+          UI.hint(`ðŸ›¸ mova o mouse para orbitar Â· [ESPAÃ‡O] para pular Â· auto em ${Math.max(0, sp.flyTime - tm).toFixed(0)}s`);
         }
       }
       if (S.phase === 'FALL') fallStep(dt);
@@ -1419,7 +1404,7 @@
           const fora = S.phase === 'PLAY' && !MP.player.dead && dz > zc.r && !MP.state.cinematic;
           UI.gasTint.style.opacity = fora ? '1' : '0'; // tela avermelha FORA da safe
           if (fora)
-            MP.playerDamage(zc.dps * 0.5, null); // se alguém me feriu há pouco, a kill ainda é dele
+            MP.playerDamage(zc.dps * 0.5, null); // se alguÃ©m me feriu hÃ¡ pouco, a kill ainda Ã© dele
         }
       }
 
@@ -1438,21 +1423,21 @@
         }
       }
 
-      /* prompt de baú + HUD (com folga, não a cada frame) */
+      /* prompt de baÃº + HUD (com folga, nÃ£o a cada frame) */
       promptAcc += dt;
       if (promptAcc > 0.15) {
         promptAcc = 0;
         if (S.phase === 'PLAY' && !MP.player.dead) {
           const c = nearestCrate();
-          if (c) UI.hint('<b style="color:#ffd76a">E</b> — ABRIR BAÚ');
-          else if (UI.hintBox.innerHTML.includes('ABRIR BAÚ')) UI.hint('');
+          if (c) UI.hint('<b style="color:#ffd76a">E</b> â€” ABRIR BAÃš');
+          else if (UI.hintBox.innerHTML.includes('ABRIR BAÃš')) UI.hint('');
         }
       }
       hudAcc += dt;
       if (hudAcc > 0.25) {
         hudAcc = 0;
-        UI.pillAlive.innerHTML = `👥 <b>${S.aliveCount}</b> vivos · ☠ <b>${S.myKills}</b>`;
-        UI.pillZone.textContent = zc.label || '—';
+        UI.pillAlive.innerHTML = `ðŸ‘¥ <b>${S.aliveCount}</b> vivos Â· â˜  <b>${S.myKills}</b>`;
+        UI.pillZone.textContent = zc.label || 'â€”';
         UI.pillZone.className = 'pill' + (zc.shrinking ? ' warn' : '');
         drawZoneMap();
       }
@@ -1498,11 +1483,11 @@
     }
 
     /* =============== estado inicial (conforme a fase do servidor) =============== */
-    function require2() {} // (âncora de organização; nada a fazer)
+    function require2() {} // (Ã¢ncora de organizaÃ§Ã£o; nada a fazer)
 
     for (const p of INIT.players || []) if (p.pos && p.alive) makeRemote(p.id, p.nick, p.colors, p.pos);
 
-    /* hook de depuração/testes (inofensivo em produção) */
+    /* hook de depuraÃ§Ã£o/testes (inofensivo em produÃ§Ã£o) */
     window.__BR_debug = {
       S, zc, crates, remotes, drops, LOBBY,
       teardown,
@@ -1514,11 +1499,11 @@
     };
 
     if (INIT.phase === 'PLAYING') {
-      beginMatch(true); // entrou no meio: espectador até a próxima
+      beginMatch(true); // entrou no meio: espectador atÃ© a prÃ³xima
     } else if (INIT.phase === 'ENDED') {
       window.__BR_active = true;
-      LOBBY.overlay(`<div class="brTitle">⏳ PARTIDA ACABANDO</div>
-        <div style="text-align:center;margin-top:12px;opacity:.8">a próxima começa em instantes...</div>`);
+      LOBBY.overlay(`<div class="brTitle">â³ PARTIDA ACABANDO</div>
+        <div style="text-align:center;margin-top:12px;opacity:.8">a prÃ³xima comeÃ§a em instantes...</div>`);
     } else {
       LOBBY.show();
     }

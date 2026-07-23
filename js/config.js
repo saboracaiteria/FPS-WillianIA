@@ -32,3 +32,11 @@ export const CFG = {
 export const SETTINGS = Object.assign({ vol: 0.5, res: 1, shadow: 1, bloom: 1, ping: 1 },
   (() => { try { return JSON.parse(localStorage.getItem('callofai_cfg') || '{}'); } catch (e) { return {}; } })());
 export function persistSettings() { localStorage.setItem('callofai_cfg', JSON.stringify(SETTINGS)); }
+
+/* ===== Mobile detection ===== */
+export function isMobileDevice() {
+  return /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+export function isSmallScreen() {
+  return window.innerWidth < 768 || window.innerHeight < 600;
+}

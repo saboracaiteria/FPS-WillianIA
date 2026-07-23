@@ -9,7 +9,7 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CSM } from 'three/addons/csm/CSM.js';
-import { CFG, SETTINGS, persistSettings } from './js/config.js';
+import { CFG, SETTINGS, persistSettings, isMobileDevice, isSmallScreen } from './js/config.js';
 import { clamp, lerp, damp, rand, TAU, _v1, _v2, _v3, _q1, _m1, chaseCamPos, chaseLook } from './js/utils.js';
 import { createTerrain } from './js/terrain.js';
 import { createSFX } from './js/sfx.js';
@@ -41,6 +41,7 @@ import { createCityModel } from './js/citymodel.js';
 import { createClouds } from './js/clouds.js';
 import { createDropship } from './js/dropship.js';
 import { createParachute } from './js/parachute.js';
+import { TouchControls } from './js/touch-controls.js';
 
 /* ================================================================
    MULTIPLAYER — bootstrap aditivo. Conecta ANTES da geração do mundo
@@ -94,6 +95,13 @@ scene.fog = new THREE.Fog(FOG_COLOR, CFG.VIEW_DIST * 0.5, CFG.VIEW_DIST);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.08, CFG.VIEW_DIST + 600);
 camera.position.set(0, 3, 8);
+
+// Touch Controls para Android + mobile detection
+const touchControls = new TouchControls(camera, canvas);
+if (touchControls.isTouchDevice || isMobileDevice() || isSmallScreen()) {
+  touchControls.enable();
+}
+window.__touch = touchControls;
 
 // ambiente PMREM para os MeshStandardMaterial não ficarem chapados
 {
@@ -834,10 +842,11 @@ const recoil = {
 };
 
 function playerUpdate(dt, t) {
-  const sprintHeld = keys['ShiftLeft'] || keys['ShiftRight'];
-  const crouchHeld = keys['ControlLeft'] || keys['ControlRight'];
-  const fwd = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
-  const str = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
+  const usingTouch = window.__touch && window.__touch.enabled;
+  const sprintHeld = usingTouch ? (window.__touch.moveY < -0.5 && Math.abs(window.__touch.moveX) < 0.3) : (keys['ShiftLeft'] || keys['ShiftRight']);
+  const crouchHeld = usingTouch ? window.__touch.crouch : (keys['ControlLeft'] || keys['ControlRight']);
+  const fwd = usingTouch ? -window.__touch.moveY : ((keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0));
+  const str = usingTouch ? window.__touch.moveX : ((keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0));
 
   const sliding = player.slideT > 0;
   player.crouchT = damp(player.crouchT, (crouchHeld || sliding) ? 1 : 0, 12, dt);
@@ -1923,6 +1932,25 @@ function tick(forceDt) {
     fpsFrames = 0; fpsAcc = 0;
   }
   justPressed.clear();
+    // ========== TOUCH CONTROLS UPDATE ==========
+    if (window.__touch && window.__touch.enabled) {
+      window.__touch.update(dt);
+      const tc = window.__touch;
+      if (tc.jump) { justPressed.add('Space'); tc.jump = false; }
+      if (tc.reload) { justPressed.add('KeyR'); tc.reload = false; }
+      if (tc.interact) { justPressed.add('KeyE'); tc.interact = false; }
+      if (tc.grenade) { justPressed.add('KeyG'); tc.grenade = false; }
+      if (tc.medkit) { justPressed.add('KeyQ'); tc.medkit = false; }
+      if (tc.switchWeapon >= 0) {
+        justPressed.add('Digit' + (tc.switchWeapon + 1));
+        tc.switchWeapon = -1;
+      }
+      if (tc.inventory) { justPressed.add('Tab'); tc.inventory = false; }
+      if (tc.toggleSight) { justPressed.add('KeyT'); tc.toggleSight = false; }
+      mouse.aiming = tc.aim;
+      if (tc.shoot) { mouse.shooting = true; mouse.clicked = true; }
+      else { mouse.shooting = false; mouse.clicked = false; }
+    }
 }
 
 /* ================== boot ================== */
