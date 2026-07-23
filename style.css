@@ -268,6 +268,29 @@
     #touchControls [data-action="jump"] { width: clamp(34px, 8vmin, 48px) !important; height: clamp(34px, 8vmin, 48px) !important; }
     #touchControls [data-action="crouch"] { width: clamp(30px, 7vmin, 44px) !important; height: clamp(30px, 7vmin, 44px) !important; }
     #touchControls [data-action="reload"] { width: clamp(28px, 6vmin, 40px) !important; height: clamp(28px, 6vmin, 40px) !important; }
+    #touchControls [data-action="grenade"] { width: clamp(28px, 6vmin, 40px) !important; height: clamp(28px, 6vmin, 40px) !important; }
+    #touchControls [data-action="medkit"] { width: clamp(28px, 6vmin, 40px) !important; height: clamp(28px, 6vmin, 40px) !important; }
     #touchControls [data-action="interact"] { width: clamp(36px, 9vmin, 50px) !important; height: clamp(36px, 9vmin, 50px) !important; }
     #touchControls [data-action="pause"] { width: clamp(28px, 6vmin, 40px) !important; height: clamp(28px, 6vmin, 40px) !important; }
+    #touchControls [data-action="fullscreen"] { width: clamp(28px, 6vmin, 40px) !important; height: clamp(28px, 6vmin, 40px) !important; }
+
+    /* HUD mobile: vida + minimapa centralizados embaixo, menores */
+    #healthWrap { left: 50%; bottom: 8px; transform: translateX(-50%); width: 180px; }
+    #healthLabel { font-size: 9px; letter-spacing: 2px; margin-bottom: 3px; }
+    #healthBar { height: 7px; }
+    #armorBar { height: 5px; margin-bottom: 2px; }
+
+    #minimapWrap { left: 50%; top: auto; bottom: 50px; transform: translateX(-50%); width: 100px; height: 100px; }
+
+    #ammoWrap { right: 12px; bottom: 8px; }
+    #ammoMag { font-size: 28px; }
+    #ammoReserve { font-size: 12px; }
+    #weaponName { font-size: 9px; }
+
+    #speedo { right: 12px; bottom: 8px; }
+    #speedVal { font-size: 28px; }
+
+    #fps { font-size: 9px; right: 6px; top: 4px; }
+    #killfeed { right: 8px; top: 80px; font-size: 11px; }
+    .kf { padding: 3px 8px; }
   }

@@ -78,6 +78,7 @@ export class TouchControls {
     this._btnMedkit = null;
     this._btnInteract = null;
     this._btnPause = null;
+    this._btnFullscreen = null;
     this._weaponBar = null;
     this._weaponSlots = [];
 
@@ -91,6 +92,7 @@ export class TouchControls {
     this._resetBtn = null;
     this._editOverlay = null;
     this._dragData = null;
+    this._resizeData = null;
     this._panelPositions = {};
   }
 
@@ -103,7 +105,6 @@ export class TouchControls {
     this._buildDOM();
     this._bindEvents();
     this._loadLayout();
-    // Esconde o cursor (não há pointer lock)
     document.body.style.cursor = 'none';
     console.log('[TouchControls] ativado');
   }
@@ -187,6 +188,7 @@ export class TouchControls {
       pointerEvents: 'auto',
     });
     joyContainer.dataset.panelId = 'joystick';
+    joyContainer.dataset.editable = 'true';
 
     this._joystickBase = document.createElement('div');
     Object.assign(this._joystickBase.style, {
@@ -216,72 +218,90 @@ export class TouchControls {
     joyContainer.appendChild(this._joystickKnob);
     this._container.appendChild(joyContainer);
 
-    // --- Botões (canto inferior direito) ---
-    const btnPanel = document.createElement('div');
-    Object.assign(btnPanel.style, {
-      position: 'absolute',
-      right: '16px',
-      bottom: '24px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '8px',
-      alignItems: 'flex-end',
-      pointerEvents: 'none',
-    });
-    btnPanel.dataset.panelId = 'rightPanel';
-
-    // Botão PULAR
-    this._btnJump = this._createBtn('⤊', '48px', '#5ab0ff', 'rgba(90,176,255,0.25)');
-    this._btnJump.dataset.action = 'jump';
-
-    // Botão AGACHAR
-    this._btnCrouch = this._createBtn('⤋', '44px', '#a0a0a0', 'rgba(160,160,160,0.2)');
-    this._btnCrouch.dataset.action = 'crouch';
-
-    // Botão RECARREGAR
-    this._btnReload = this._createBtn('↺', '40px', '#cccccc', 'rgba(200,200,200,0.15)');
-    this._btnReload.dataset.action = 'reload';
-
-    // Botão GRANADA
-    this._btnGrenade = this._createBtn('●', '40px', '#ff8844', 'rgba(255,136,68,0.2)');
-    this._btnGrenade.dataset.action = 'grenade';
-
-    // Botão MEDKIT
-    this._btnMedkit = this._createBtn('✚', '40px', '#ff6a5e', 'rgba(255,106,94,0.2)');
-    this._btnMedkit.dataset.action = 'medkit';
-
-    // Botão MIRAR (ADS)
-    this._btnAim = this._createBtn('🎯', '46px', '#ffcc44', 'rgba(255,204,68,0.2)');
-    this._btnAim.dataset.action = 'aim';
-
-    // Botão ATIRAR (grande)
+    // --- Botões individuais (cada um posicionável) ---
+    // ATIRAR (grande)
     this._btnShoot = this._createBtn('', '72px', '#ff4444', 'rgba(255,68,68,0.3)');
     this._btnShoot.dataset.action = 'shoot';
-    // Círculo interno como indicador
+    this._btnShoot.dataset.editable = 'true';
+    this._btnShoot.dataset.panelId = 'shoot';
+    Object.assign(this._btnShoot.style, { position: 'absolute', right: '24px', bottom: '24px' });
     const inner = document.createElement('div');
-    Object.assign(inner.style, {
-      width: '32px',
-      height: '32px',
-      borderRadius: '50%',
-      background: 'rgba(255,255,255,0.5)',
-    });
+    Object.assign(inner.style, { width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' });
     this._btnShoot.appendChild(inner);
+    this._container.appendChild(this._btnShoot);
 
-    // Botão INTERAGIR (contextual)
+    // MIRAR (ADS)
+    this._btnAim = this._createBtn('🎯', '46px', '#ffcc44', 'rgba(255,204,68,0.2)');
+    this._btnAim.dataset.action = 'aim';
+    this._btnAim.dataset.editable = 'true';
+    this._btnAim.dataset.panelId = 'aim';
+    Object.assign(this._btnAim.style, { position: 'absolute', right: '110px', bottom: '40px' });
+    this._container.appendChild(this._btnAim);
+
+    // PULAR
+    this._btnJump = this._createBtn('⤊', '48px', '#5ab0ff', 'rgba(90,176,255,0.25)');
+    this._btnJump.dataset.action = 'jump';
+    this._btnJump.dataset.editable = 'true';
+    this._btnJump.dataset.panelId = 'jump';
+    Object.assign(this._btnJump.style, { position: 'absolute', right: '24px', bottom: '110px' });
+    this._container.appendChild(this._btnJump);
+
+    // AGACHAR
+    this._btnCrouch = this._createBtn('⤋', '44px', '#a0a0a0', 'rgba(160,160,160,0.2)');
+    this._btnCrouch.dataset.action = 'crouch';
+    this._btnCrouch.dataset.editable = 'true';
+    this._btnCrouch.dataset.panelId = 'crouch';
+    Object.assign(this._btnCrouch.style, { position: 'absolute', right: '80px', bottom: '110px' });
+    this._container.appendChild(this._btnCrouch);
+
+    // RECARREGAR
+    this._btnReload = this._createBtn('↺', '40px', '#cccccc', 'rgba(200,200,200,0.15)');
+    this._btnReload.dataset.action = 'reload';
+    this._btnReload.dataset.editable = 'true';
+    this._btnReload.dataset.panelId = 'reload';
+    Object.assign(this._btnReload.style, { position: 'absolute', right: '130px', bottom: '110px' });
+    this._container.appendChild(this._btnReload);
+
+    // GRANADA
+    this._btnGrenade = this._createBtn('●', '40px', '#ff8844', 'rgba(255,136,68,0.2)');
+    this._btnGrenade.dataset.action = 'grenade';
+    this._btnGrenade.dataset.editable = 'true';
+    this._btnGrenade.dataset.panelId = 'grenade';
+    Object.assign(this._btnGrenade.style, { position: 'absolute', right: '24px', bottom: '170px' });
+    this._container.appendChild(this._btnGrenade);
+
+    // MEDKIT
+    this._btnMedkit = this._createBtn('✚', '40px', '#ff6a5e', 'rgba(255,106,94,0.2)');
+    this._btnMedkit.dataset.action = 'medkit';
+    this._btnMedkit.dataset.editable = 'true';
+    this._btnMedkit.dataset.panelId = 'medkit';
+    Object.assign(this._btnMedkit.style, { position: 'absolute', right: '80px', bottom: '170px' });
+    this._container.appendChild(this._btnMedkit);
+
+    // INTERAGIR (contextual)
     this._btnInteract = this._createBtn('✋', '50px', '#4CAF50', 'rgba(76,175,80,0.25)');
     this._btnInteract.dataset.action = 'interact';
-    this._btnInteract.style.display = 'none'; // escondido até contexto
+    this._btnInteract.dataset.editable = 'true';
+    this._btnInteract.dataset.panelId = 'interact';
+    this._btnInteract.style.display = 'none';
+    Object.assign(this._btnInteract.style, { position: 'absolute', right: '24px', bottom: '230px' });
+    this._container.appendChild(this._btnInteract);
 
-    // Montagem dos botões (ordem: pular, agachar, recarregar, granada, medkit, mirar, atirar, interagir)
-    btnPanel.appendChild(this._btnJump);
-    btnPanel.appendChild(this._btnCrouch);
-    btnPanel.appendChild(this._btnReload);
-    btnPanel.appendChild(this._btnGrenade);
-    btnPanel.appendChild(this._btnMedkit);
-    btnPanel.appendChild(this._btnAim);
-    btnPanel.appendChild(this._btnShoot);
-    btnPanel.appendChild(this._btnInteract);
-    this._container.appendChild(btnPanel);
+    // PAUSA (canto superior esquerdo)
+    this._btnPause = this._createBtn('⏸', '40px', '#ffffff', 'rgba(0,0,0,0.3)');
+    this._btnPause.dataset.action = 'pause';
+    this._btnPause.dataset.editable = 'true';
+    this._btnPause.dataset.panelId = 'pause';
+    Object.assign(this._btnPause.style, { position: 'absolute', left: '12px', top: '12px' });
+    this._container.appendChild(this._btnPause);
+
+    // FULLSCREEN (ao lado do pausa)
+    this._btnFullscreen = this._createBtn('⛶', '40px', '#ffffff', 'rgba(0,0,0,0.3)');
+    this._btnFullscreen.dataset.action = 'fullscreen';
+    this._btnFullscreen.dataset.editable = 'true';
+    this._btnFullscreen.dataset.panelId = 'fullscreen';
+    Object.assign(this._btnFullscreen.style, { position: 'absolute', left: '60px', top: '12px' });
+    this._container.appendChild(this._btnFullscreen);
 
     // --- Barra de armas (lateral direita) ---
     this._weaponBar = document.createElement('div');
@@ -296,7 +316,7 @@ export class TouchControls {
       pointerEvents: 'auto',
     });
     this._weaponBar.dataset.panelId = 'weaponBar';
-    // 4 slots de arma (pode expandir)
+    this._weaponBar.dataset.editable = 'true';
     for (let i = 0; i < 4; i++) {
       const slot = this._createBtn(`${i + 1}`, '36px', '#888888', 'rgba(0,0,0,0.35)');
       slot.style.fontSize = '14px';
@@ -309,18 +329,9 @@ export class TouchControls {
     }
     this._container.appendChild(this._weaponBar);
 
-    // --- Botão de pausa (canto superior esquerdo) ---
-    this._btnPause = this._createBtn('⏸', '40px', '#ffffff', 'rgba(0,0,0,0.3)');
-    this._btnPause.style.position = 'absolute';
-    this._btnPause.style.left = '12px';
-    this._btnPause.style.top = '12px';
-    this._btnPause.dataset.action = 'pause';
-    this._btnPause.dataset.panelId = 'pause';
-    this._container.appendChild(this._btnPause);
-
     // --- Botão EDITAR HUD ---
     this._editBtn = document.createElement('div');
-    this._editBtn.textContent = '✎ EDITAR HUD';
+    this._editBtn.textContent = '✎ EDITAR';
     Object.assign(this._editBtn.style, {
       position: 'fixed', top: '12px', right: '12px',
       padding: '6px 14px', fontSize: '13px', fontWeight: 'bold',
@@ -365,7 +376,7 @@ export class TouchControls {
       WebkitUserSelect: 'none', WebkitTapHighlightColor: 'transparent',
     });
     const hint = document.createElement('div');
-    hint.textContent = 'Arraste os painéis para reposicionar';
+    hint.textContent = 'Arraste para mover · pinch para redimensionar';
     Object.assign(hint.style, {
       color: 'rgba(255,255,255,0.6)', fontSize: '13px', userSelect: 'none',
     });
@@ -376,8 +387,6 @@ export class TouchControls {
     document.body.appendChild(this._editOverlay);
 
     this._injectStyles();
-
-    // Append ao body
     document.body.appendChild(this._container);
   }
 
@@ -434,7 +443,7 @@ export class TouchControls {
     this._lookArea.addEventListener('touchend', b.lookEnd, { passive: true });
     this._lookArea.addEventListener('touchcancel', b.lookEnd, { passive: true });
 
-    // Botões
+    // Botões individuais
     this._bindBtn('shoot', {
       start: () => { this.shoot = true; this._pulse(this._btnShoot); },
       end: () => { this.shoot = false; },
@@ -464,9 +473,14 @@ export class TouchControls {
     this._bindBtn('pause', {
       start: () => {
         this._pulse(this._btnPause);
-        // Dispara evento ESC para pausar o jogo
         if (document.pointerLockElement) document.exitPointerLock();
         window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', key: 'Escape', bubbles: true }));
+      },
+    });
+    this._bindBtn('fullscreen', {
+      start: () => {
+        this._pulse(this._btnFullscreen);
+        this._toggleFullscreen();
       },
     });
 
@@ -499,16 +513,41 @@ export class TouchControls {
       this._resetBtn.addEventListener('touchstart', this._bound.editReset, { passive: false });
       this._resetBtn.addEventListener('mousedown', e => { e.preventDefault(); this._resetLayout(); });
     }
-    // --- Drag: painéis ---
-    for (const pid of ['joystick', 'rightPanel', 'weaponBar', 'pause']) {
-      const el = document.querySelector(`[data-panel-id="${pid}"]`);
-      if (!el) continue;
-      const start = (e) => { this._startDrag(pid, e); };
-      el.addEventListener('touchstart', start, { passive: true });
-      el.addEventListener('mousedown', start);
+
+    // --- Drag e Resize: elementos editáveis individuais ---
+    const editableEls = this._container.querySelectorAll('[data-editable="true"]');
+    for (const el of editableEls) {
+      const pid = el.dataset.panelId;
+      // Drag
+      const startDrag = (e) => { this._startDrag(pid, e); };
+      el.addEventListener('touchstart', startDrag, { passive: true });
+      el.addEventListener('mousedown', startDrag);
+      // Resize (long press ou pinch)
+      let resizeTimer = null;
+      el.addEventListener('touchstart', (e) => {
+        if (!this._editMode) return;
+        if (e.touches.length >= 2) {
+          resizeTimer = setTimeout(() => this._startResize(pid, e), 300);
+        }
+      }, { passive: true });
+      el.addEventListener('touchmove', (e) => {
+        if (resizeTimer) { clearTimeout(resizeTimer); resizeTimer = null; }
+        if (this._resizeData) this._onResize(e);
+      }, { passive: true });
+      el.addEventListener('touchend', () => {
+        if (resizeTimer) { clearTimeout(resizeTimer); resizeTimer = null; }
+        if (this._resizeData) this._endResize();
+      }, { passive: true });
     }
-    this._bound.docMove = e => this._onDrag(e);
-    this._bound.docEnd = e => this._endDrag(e);
+
+    this._bound.docMove = e => {
+      if (this._dragData) this._onDrag(e);
+      if (this._resizeData) this._onResize(e);
+    };
+    this._bound.docEnd = e => {
+      this._endDrag(e);
+      if (this._resizeData) this._endResize();
+    };
     document.addEventListener('touchmove', this._bound.docMove, { passive: true });
     document.addEventListener('mousemove', this._bound.docMove);
     document.addEventListener('touchend', this._bound.docEnd, { passive: true });
@@ -538,8 +577,11 @@ export class TouchControls {
     this._btnJump = null;
     this._btnCrouch = null;
     this._btnReload = null;
+    this._btnGrenade = null;
+    this._btnMedkit = null;
     this._btnInteract = null;
     this._btnPause = null;
+    this._btnFullscreen = null;
     this._weaponSlots = [];
     this._editBtn = null;
     this._doneBtn = null;
@@ -581,17 +623,6 @@ export class TouchControls {
 .tc-edit-panel { outline: 2px dashed #d4a017 !important; outline-offset: 2px !important; transition: none !important; }
 .tc-edit-panel-dragging { outline: 3px solid #ffd700 !important; opacity: 0.85 !important; }
 #touchControls .tc-edit-joystick-knob { width: clamp(30px, 10vmin, 50px) !important; height: clamp(30px, 10vmin, 50px) !important; }
-@media (max-width: 600px) {
-  #touchControls [data-action="shoot"] { width: clamp(48px, 12vmin, 72px) !important; height: clamp(48px, 12vmin, 72px) !important; }
-  #touchControls [data-action="aim"] { width: clamp(34px, 8vmin, 46px) !important; height: clamp(34px, 8vmin, 46px) !important; }
-  #touchControls [data-action="jump"] { width: clamp(34px, 8vmin, 48px) !important; height: clamp(34px, 8vmin, 48px) !important; }
-  #touchControls [data-action="crouch"] { width: clamp(30px, 7vmin, 44px) !important; height: clamp(30px, 7vmin, 44px) !important; }
-  #touchControls [data-action="reload"] { width: clamp(28px, 6vmin, 40px) !important; height: clamp(28px, 6vmin, 40px) !important; }
-  #touchControls [data-action="grenade"] { width: clamp(28px, 6vmin, 40px) !important; height: clamp(28px, 6vmin, 40px) !important; }
-  #touchControls [data-action="medkit"] { width: clamp(28px, 6vmin, 40px) !important; height: clamp(28px, 6vmin, 40px) !important; }
-  #touchControls [data-action="interact"] { width: clamp(36px, 9vmin, 50px) !important; height: clamp(36px, 9vmin, 50px) !important; }
-  #touchControls [data-action="pause"] { width: clamp(28px, 6vmin, 40px) !important; height: clamp(28px, 6vmin, 40px) !important; }
-}
 `;
     document.head.appendChild(s);
   }
@@ -632,15 +663,18 @@ export class TouchControls {
 
   _saveLayout() {
     const layout = {};
-    for (const pid of ['joystick', 'rightPanel', 'weaponBar', 'pause']) {
-      const el = document.querySelector(`[data-panel-id="${pid}"]`);
-      if (!el) continue;
+    const editableEls = this._container.querySelectorAll('[data-editable="true"]');
+    for (const el of editableEls) {
+      const pid = el.dataset.panelId;
+      if (!pid) continue;
       const rect = el.getBoundingClientRect();
       layout[pid] = {
         left: rect.left + 'px',
         top: rect.top + 'px',
         right: document.body.clientWidth - rect.right + 'px',
         bottom: document.body.clientHeight - rect.bottom + 'px',
+        width: rect.width + 'px',
+        height: rect.height + 'px',
       };
     }
     try { localStorage.setItem('tc_panel_layout', JSON.stringify(layout)); } catch (e) {}
@@ -650,26 +684,28 @@ export class TouchControls {
     let layout;
     try { layout = JSON.parse(localStorage.getItem('tc_panel_layout')); } catch (e) { return; }
     if (!layout) return;
-    for (const pid of ['joystick', 'rightPanel', 'weaponBar', 'pause']) {
-      const el = document.querySelector(`[data-panel-id="${pid}"]`);
-      if (!el || !layout[pid]) continue;
+    const editableEls = this._container.querySelectorAll('[data-editable="true"]');
+    for (const el of editableEls) {
+      const pid = el.dataset.panelId;
+      if (!pid || !layout[pid]) continue;
       const p = layout[pid];
-      // limpa posicionamento anterior
       el.style.left = ''; el.style.right = ''; el.style.top = ''; el.style.bottom = '';
-      el.style.transform = '';
+      el.style.width = ''; el.style.height = ''; el.style.transform = '';
       if (p.left !== undefined) el.style.left = p.left;
       if (p.top !== undefined) el.style.top = p.top;
       if (p.right !== undefined) el.style.right = p.right;
       if (p.bottom !== undefined) el.style.bottom = p.bottom;
+      if (p.width !== undefined) el.style.width = p.width;
+      if (p.height !== undefined) el.style.height = p.height;
     }
   }
 
   _resetLayout() {
     try { localStorage.removeItem('tc_panel_layout'); } catch (e) {}
-    for (const pid of ['joystick', 'rightPanel', 'weaponBar', 'pause']) {
-      const el = document.querySelector(`[data-panel-id="${pid}"]`);
-      if (!el) continue;
-      el.style.left = ''; el.style.right = ''; el.style.top = ''; el.style.bottom = ''; el.style.transform = '';
+    const editableEls = this._container.querySelectorAll('[data-editable="true"]');
+    for (const el of editableEls) {
+      el.style.left = ''; el.style.right = ''; el.style.top = ''; el.style.bottom = '';
+      el.style.width = ''; el.style.height = ''; el.style.transform = '';
     }
     this._saveAndExit();
   }
@@ -707,6 +743,41 @@ export class TouchControls {
       const { el } = this._dragData;
       if (el) el.classList.remove('tc-edit-panel-dragging');
       this._dragData = null;
+    }
+  }
+
+  // --- Resize helpers ---
+  _startResize(pid, e) {
+    if (!this._editMode || e.touches.length < 2) return;
+    const el = document.querySelector(`[data-panel-id="${pid}"]`);
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const dist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    this._resizeData = { pid, el, initialDist: dist, initialSize: rect.width };
+    el.classList.add('tc-edit-panel-dragging');
+  }
+
+  _onResize(e) {
+    if (!this._resizeData || e.touches.length < 2) return;
+    const { el, initialDist, initialSize } = this._resizeData;
+    const dist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    const scale = dist / initialDist;
+    const newSize = Math.max(24, Math.min(120, initialSize * scale));
+    el.style.width = newSize + 'px';
+    el.style.height = newSize + 'px';
+  }
+
+  _endResize() {
+    if (this._resizeData) {
+      const { el } = this._resizeData;
+      if (el) el.classList.remove('tc-edit-panel-dragging');
+      this._resizeData = null;
     }
   }
 
@@ -798,6 +869,14 @@ export class TouchControls {
     if (label) this.interactLabel = label;
     if (this._btnInteract) {
       this._btnInteract.textContent = this.interactLabel;
+    }
+  }
+
+  _toggleFullscreen() {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
     }
   }
 }
