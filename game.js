@@ -100,6 +100,10 @@ camera.position.set(0, 3, 8);
 const touchControls = new TouchControls(camera, canvas);
 if (touchControls.isTouchDevice || isMobileDevice() || isSmallScreen()) {
   touchControls.enable();
+  // Esconde touch controls até o jogo começar (overlay do menu tem z-index 100, touch tem 10000)
+  if (touchControls._container) touchControls._container.style.display = 'none';
+  if (touchControls._editBtn) touchControls._editBtn.style.display = 'none';
+  if (touchControls._editOverlay) touchControls._editOverlay.style.display = 'none';
 }
 window.__touch = touchControls;
 
@@ -797,6 +801,12 @@ function setPaused(p) {
   // geração da partida e o menu ficava na tela por cima do jogo
   ui.overlay.style.display = p ? 'flex' : 'none';
   ui.hud.classList.toggle('on', !p);
+  // Esconde touch controls quando o menu está visível (z-index 10000 bloqueava cliques)
+  if (window.__touch && window.__touch._container) {
+    window.__touch._container.style.display = p ? 'none' : '';
+    if (window.__touch._editBtn) window.__touch._editBtn.style.display = p ? 'none' : '';
+    if (window.__touch._editOverlay) window.__touch._editOverlay.style.display = p ? 'none' : '';
+  }
 }
 
 /* ================================================================
