@@ -820,11 +820,13 @@ function setPaused(p) {
       window.__touch._editOverlay.style.display = 'none';
     }
   }
-  // Mostra/esconde título "PAUSADO" e botão "RESUMIR"
+  // Mostra/esconde título "PAUSADO", botão "RESUMIR" e "ENCERRAR PARTIDA"
   const pauseTitle = document.getElementById('pauseTitle');
   const btnResume = document.getElementById('btnResume');
+  const btnEndGame = document.getElementById('btnEndGame');
   if (pauseTitle) pauseTitle.style.display = (p && state.started) ? '' : 'none';
   if (btnResume) btnResume.style.display = (p && state.started) ? '' : 'none';
+  if (btnEndGame) btnEndGame.style.display = (p && state.started) ? '' : 'none';
   // Pausa inimigos no modo offline (não BR)
   if (window.__Enemies && !window.__BR_active) {
     window.__Enemies.paused = p;
@@ -2068,6 +2070,29 @@ $('btnTraining').addEventListener('click', e => {
 $('btnExitTraining').addEventListener('click', e => {
   e.stopPropagation();
   Training.exitToMenu();
+});
+
+// Botão ENCERRAR PARTIDA - volta ao menu principal
+$('btnEndGame').addEventListener('click', e => {
+  e.stopPropagation();
+  if (confirm('Tem certeza que deseja encerrar a partida? Todo o progresso será perdido.')) {
+    // Volta ao menu principal
+    state.started = false;
+    state.paused = false;
+    setPaused(false);
+    ui.overlay.style.display = 'flex';
+    ui.overlay.classList.remove('paused');
+    // Esconde botão de pausa e resume
+    const pauseTitle = document.getElementById('pauseTitle');
+    const btnResume = document.getElementById('btnResume');
+    const btnEndGame = document.getElementById('btnEndGame');
+    if (pauseTitle) pauseTitle.style.display = 'none';
+    if (btnResume) btnResume.style.display = 'none';
+    if (btnEndGame) btnEndGame.style.display = 'none';
+    // Sai do fullscreen se estiver
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    history.pushState({ screen: 'menu' }, '');
+  }
 });
 if (__mpSocket) { // multiplayer no ar: o botão vira aviso até o lobby abrir
   $('btnNew').classList.add('disabled');

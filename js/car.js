@@ -200,6 +200,17 @@ export function createCar(deps) {
     if (s.type === 'truck') makeVehicle(CFG_TRUCK, s.x, s.z, s.ry);
     else makeVehicle(mkSport(s.type === 'sport2' ? 0x2a6de8 : 0xd61f30), s.x, s.z, s.ry);
   }
+  // Veiculos extras espalhados pelo mapa (mais carros para explorar)
+  const extraCarSpots = [
+    { x: 50, z: 30, ry: 0 }, { x: -40, z: 60, ry: Math.PI / 2 },
+    { x: 80, z: -50, ry: Math.PI }, { x: -70, z: -30, ry: -Math.PI / 2 },
+    { x: 120, z: 80, ry: 0.3 }, { x: -100, z: 100, ry: 1.2 },
+    { x: 150, z: -100, ry: 2.1 }, { x: -130, z: -80, ry: -1.5 },
+  ];
+  for (const s of extraCarSpots) {
+    const sportColor = [0xd61f30, 0x2a6de8, 0xffcc00, 0x00cc66][Math.floor(rand(0, 4))];
+    makeVehicle(mkSport(sportColor), s.x, s.z, s.ry);
+  }
   const ready = Promise.all(vehicles.map(attachModel));
   let dustAcc = 0;
 
@@ -207,8 +218,14 @@ export function createCar(deps) {
     for (const v of vehicles) {
       const driven = state.driving && v === cur && !state.paused;
       if (driven) {
-        const fwdIn = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
-        const steerIn = (keys['KeyA'] ? 1 : 0) - (keys['KeyD'] ? 1 : 0); // +steer vira à esquerda
+        // Input de teclado
+        let fwdIn = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
+        let steerIn = (keys['KeyA'] ? 1 : 0) - (keys['KeyD'] ? 1 : 0); // +steer vira à esquerda
+        // Input de touch (joystick mobile)
+        if (window.__touch && window.__touch.enabled) {
+          fwdIn = window.__touch.moveY; // positivo = frente
+          steerIn = -window.__touch.moveX; // invertido: direita = positivo
+        }
         v.steerCur = damp(v.steerCur, steerIn * v.cfg.steer, 6, dt);
         v.vehicle.setSteeringValue(v.steerCur, 0);
         v.vehicle.setSteeringValue(v.steerCur, 1);

@@ -24,12 +24,12 @@
 
   /* fases da cinematográfica, em segundos desde cinematicStartedAt */
   const PHASES = {
-    skyPan: [0, 4],           // câmera sobe, mísseis ao longe
-    missileClose: [4, 7.5],   // close no míssil assinado "By RenatoDReis"
-    wide: [7.5, 10],          // plano aberto sobre a cidade
-    mirv: [10, 12.5],         // ogivas se separam e mergulham
-    impact: 12.5,             // instante oficial do impacto
-    aftermath: [12.5, 17],    // fumaça baixa, câmera devolvida
+    skyPan: [0, 8],             // câmera sobe, mísseis ao longe (dobrado)
+    missileClose: [8, 15],      // close no míssil assinado "By RenatoDReis" (dobrado)
+    wide: [15, 20],             // plano aberto sobre a cidade (dobrado)
+    mirv: [20, 25],             // ogivas se separam e mergulham (dobrado)
+    impact: 25,                 // instante oficial do impacto (dobrado de 12.5)
+    aftermath: [25, 32],        // fumaça baixa, câmera devolvida (estendido)
   };
 
   /* contagens visuais por qualidade (assinado e impactos NÃO variam) */

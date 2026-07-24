@@ -4,7 +4,7 @@ import * as THREE from 'three';
 export function createClouds({ scene, Env, worldSize = 1000 }) {
   let seed = 0xC10D5A11;
   const rnd = () => ((seed = Math.imul(seed ^ (seed >>> 15), 1 | seed) + 0x6D2B79F5 | 0) >>> 0) / 4294967296;
-  const cloudCount = 42, puffsPerCloud = 3, count = cloudCount * puffsPerCloud;
+  const cloudCount = 80, puffsPerCloud = 3, count = cloudCount * puffsPerCloud;
   const geo = new THREE.IcosahedronGeometry(1, 1);
   const mat = new THREE.MeshStandardMaterial({
     color: 0xe6edf4, roughness: 1, metalness: 0,
