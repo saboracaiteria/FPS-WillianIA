@@ -811,7 +811,10 @@ function setPaused(p) {
   // Esconde touch controls quando o menu está visível (z-index 10000 bloqueava cliques)
   if (window.__touch && window.__touch._container) {
     window.__touch._container.style.display = p ? 'none' : '';
-    if (window.__touch._editOverlay) window.__touch._editOverlay.style.display = p ? 'none' : '';
+    // Edit overlay só aparece quando edit mode está ativo
+    if (window.__touch._editOverlay && !window.__touch._editMode) {
+      window.__touch._editOverlay.style.display = 'none';
+    }
   }
 }
 window.__setPaused = setPaused;

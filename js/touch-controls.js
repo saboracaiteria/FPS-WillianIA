@@ -438,9 +438,34 @@ export class TouchControls {
     this._lookArea.addEventListener('touchcancel', b.lookEnd, { passive: true });
 
     // Botões individuais
+    // TIRO HÍBRIDO (CoD Mobile style): tap = tiro rápido, hold = mira (ADS)
+    let shootHoldTimer = null;
+    let shootHeld = false;
     this._bindBtn('shoot', {
-      start: () => { this.shoot = true; this._pulse(this._btnShoot); },
-      end: () => { this.shoot = false; },
+      start: () => {
+        shootHeld = true;
+        // Se segurar por mais de 180ms, entra em modo mira (ADS)
+        shootHoldTimer = setTimeout(() => {
+          if (shootHeld) {
+            this.aim = true;
+            this._pulse(this._btnAim);
+          }
+        }, 180);
+      },
+      end: () => {
+        shootHeld = false;
+        clearTimeout(shootHoldTimer);
+        if (this.aim) {
+          // Estava mirando — atira ao soltar
+          this.shoot = true;
+          this.aim = false;
+          setTimeout(() => { this.shoot = false; }, 50);
+        } else {
+          // Tap rápido — tiro direto
+          this.shoot = true;
+          setTimeout(() => { this.shoot = false; }, 80);
+        }
+      },
     });
     this._bindBtn('aim', {
       start: () => { this.aim = true; this._pulse(this._btnAim); },
