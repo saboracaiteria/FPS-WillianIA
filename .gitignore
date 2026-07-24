@@ -18,3 +18,6 @@ assets/models/Armas/bazooka_rocket_launcher_low_poly.glb
 
 # evidências geradas localmente pelos harness de captura
 output/
+
+# certificados autoassinados (HTTPS local)
+.cert/
