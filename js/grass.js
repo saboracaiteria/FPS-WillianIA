@@ -233,5 +233,23 @@ export function createGrass(deps) {
     }
   }
 
-  return { update, material, PATCH_RADIUS };
+  function setVisible(v) {
+    for (const ch of chunks) {
+      ch.mesh.visible = v;
+    }
+  }
+
+  function setDensity(d) {
+    // d = 1 (normal), 0.5 (reduzida - mostra metade dos chunks), 0 (removida)
+    if (d === 0) { setVisible(false); return; }
+    setVisible(true);
+    if (d >= 1) return;
+    // Mostra apenas uma fração dos chunks
+    const showCount = Math.ceil(chunks.length * d);
+    for (let i = 0; i < chunks.length; i++) {
+      chunks[i].mesh.visible = i < showCount;
+    }
+  }
+
+  return { update, material, PATCH_RADIUS, setVisible, setDensity };
 }

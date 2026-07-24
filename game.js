@@ -2046,15 +2046,22 @@ $('btnSettings').addEventListener('click', e => { e.stopPropagation(); $('settin
 $('btnBack').addEventListener('click', e => { e.stopPropagation(); $('settings').classList.remove('open'); });
 $('settings').addEventListener('click', e => e.stopPropagation());
 { // bindings das configurações (aplicam ao vivo + persistem)
-  const sv = $('setVol'), sr = $('setRes'), ss = $('setShadow'), sb = $('setBloom'), sp = $('setPing');
+  const sv = $('setVol'), sr = $('setRes'), sg = $('setGrass'), ss = $('setShadow'), sb = $('setBloom'), sp = $('setPing');
   sv.value = SETTINGS.vol * 100;
-  sr.value = String(SETTINGS.res); ss.value = String(SETTINGS.shadow); sb.value = String(SETTINGS.bloom);
+  sr.value = String(SETTINGS.res); sg.value = String(SETTINGS.grass); ss.value = String(SETTINGS.shadow); sb.value = String(SETTINGS.bloom);
   sp.value = String(SETTINGS.ping === 0 ? 0 : 1);
   sv.oninput = () => { SETTINGS.vol = sv.value / 100; SFX.setVolumes(); persistSettings(); };
   sr.onchange = () => { SETTINGS.res = +sr.value; renderer.setPixelRatio(Math.min(devicePixelRatio, SETTINGS.res)); composer.setSize(window.innerWidth, window.innerHeight); persistSettings(); };
+  sg.onchange = () => {
+    SETTINGS.grass = +sg.value;
+    Grass.setDensity(SETTINGS.grass);
+    persistSettings();
+  };
   ss.onchange = () => { SETTINGS.shadow = +ss.value; renderer.shadowMap.enabled = SETTINGS.shadow === 1; csmMaterials.forEach(m => m.needsUpdate = true); persistSettings(); };
   sb.onchange = () => { SETTINGS.bloom = +sb.value; bloomPass.enabled = SETTINGS.bloom === 1; persistSettings(); };
   sp.onchange = () => { SETTINGS.ping = +sp.value; persistSettings(); };
+  // Aplica grama ao iniciar
+  Grass.setDensity(SETTINGS.grass);
 }
 ui.overlay.addEventListener('click', (e) => {
   if (e.target.closest('#menuBtns') || e.target.closest('#settings')) return;
