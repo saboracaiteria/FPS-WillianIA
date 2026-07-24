@@ -182,8 +182,12 @@ const bloomPass = new UnrealBloomPass(
   CFG.BLOOM_STRENGTH, CFG.BLOOM_RADIUS, CFG.BLOOM_THRESHOLD
 );
 composer.addPass(bloomPass);
-const smaaPass = new SMAAPass(window.innerWidth * renderer.getPixelRatio(), window.innerHeight * renderer.getPixelRatio());
-composer.addPass(smaaPass);
+// SMAA é pesado no mobile — desabilita para ganhar FPS
+const isMobile = isMobileDevice() || isSmallScreen();
+if (!isMobile) {
+  const smaaPass = new SMAAPass(window.innerWidth * renderer.getPixelRatio(), window.innerHeight * renderer.getPixelRatio());
+  composer.addPass(smaaPass);
+}
 composer.addPass(new OutputPass());
 bloomPass.enabled = +SETTINGS.bloom !== 0;
 if (+SETTINGS.shadow === 0) renderer.shadowMap.enabled = false;
