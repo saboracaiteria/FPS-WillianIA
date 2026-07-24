@@ -102,8 +102,15 @@ if (touchControls.isTouchDevice || isMobileDevice() || isSmallScreen()) {
   touchControls.enable();
   // Esconde touch controls até o jogo começar (overlay do menu tem z-index 100, touch tem 10000)
   if (touchControls._container) touchControls._container.style.display = 'none';
-  if (touchControls._editBtn) touchControls._editBtn.style.display = 'none';
   if (touchControls._editOverlay) touchControls._editOverlay.style.display = 'none';
+  // Mostra botão "EDITAR HUD" nas configurações (apenas mobile/touch)
+  const editHudBtn = document.getElementById('btnEditHud');
+  if (editHudBtn) {
+    editHudBtn.style.display = '';
+    editHudBtn.addEventListener('click', () => {
+      touchControls.toggleEditMode();
+    });
+  }
 }
 window.__touch = touchControls;
 
@@ -804,7 +811,6 @@ function setPaused(p) {
   // Esconde touch controls quando o menu está visível (z-index 10000 bloqueava cliques)
   if (window.__touch && window.__touch._container) {
     window.__touch._container.style.display = p ? 'none' : '';
-    if (window.__touch._editBtn) window.__touch._editBtn.style.display = p ? 'none' : '';
     if (window.__touch._editOverlay) window.__touch._editOverlay.style.display = p ? 'none' : '';
   }
 }

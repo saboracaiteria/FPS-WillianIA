@@ -89,7 +89,6 @@ export class TouchControls {
 
     // --- HUD Editor ---
     this._editMode = false;
-    this._editBtn = null;
     this._doneBtn = null;
     this._resetBtn = null;
     this._editOverlay = null;
@@ -121,6 +120,13 @@ export class TouchControls {
     this._destroyDOM();
     document.body.style.cursor = '';
     console.log('[TouchControls] desativado');
+  }
+
+  /**
+   * Ativa/desativa o modo de edição do HUD (chamado externamente pelo menu de configurações).
+   */
+  toggleEditMode() {
+    this._toggleEditMode();
   }
 
   /**
@@ -331,20 +337,6 @@ export class TouchControls {
     }
     this._container.appendChild(this._weaponBar);
 
-    // --- Botão EDITAR HUD ---
-    this._editBtn = document.createElement('div');
-    this._editBtn.textContent = '✎ EDITAR';
-    Object.assign(this._editBtn.style, {
-      position: 'fixed', top: '12px', right: '12px',
-      padding: '6px 14px', fontSize: '13px', fontWeight: 'bold',
-      color: '#d4a017', background: 'rgba(0,0,0,0.55)',
-      border: '2px solid #d4a017', borderRadius: '8px',
-      cursor: 'pointer', zIndex: '10001',
-      pointerEvents: 'auto', userSelect: 'none',
-      WebkitUserSelect: 'none', WebkitTapHighlightColor: 'transparent',
-    });
-    document.body.appendChild(this._editBtn);
-
     // --- Overlay de edição ---
     this._editOverlay = document.createElement('div');
     this._editOverlay.style.display = 'none';
@@ -502,12 +494,6 @@ export class TouchControls {
       }, { passive: false });
     }
 
-    // --- Editor: botão EDITAR HUD ---
-    if (this._editBtn) {
-      this._bound.editToggle = e => { e.preventDefault(); this._toggleEditMode(); };
-      this._editBtn.addEventListener('touchstart', this._bound.editToggle, { passive: false });
-      this._editBtn.addEventListener('mousedown', e => { e.preventDefault(); this._toggleEditMode(); });
-    }
     // --- Editor: PRONTO ---
     if (this._doneBtn) {
       this._bound.editDone = e => { e.preventDefault(); this._saveAndExit(); };
@@ -569,9 +555,6 @@ export class TouchControls {
     if (this._container && this._container.parentNode) {
       this._container.parentNode.removeChild(this._container);
     }
-    if (this._editBtn && this._editBtn.parentNode) {
-      this._editBtn.parentNode.removeChild(this._editBtn);
-    }
     if (this._editOverlay && this._editOverlay.parentNode) {
       this._editOverlay.parentNode.removeChild(this._editOverlay);
     }
@@ -590,7 +573,6 @@ export class TouchControls {
     this._btnPause = null;
     this._btnFullscreen = null;
     this._weaponSlots = [];
-    this._editBtn = null;
     this._doneBtn = null;
     this._resetBtn = null;
     this._editOverlay = null;
@@ -644,7 +626,6 @@ export class TouchControls {
 
   _enterEditMode() {
     this._editMode = true;
-    if (this._editBtn) this._editBtn.style.display = 'none';
     if (this._editOverlay) this._editOverlay.style.display = 'block';
     // destaca painéis
     for (const pid of ['joystick', 'rightPanel', 'weaponBar', 'pause']) {
@@ -655,7 +636,6 @@ export class TouchControls {
 
   _exitEditMode() {
     this._editMode = false;
-    if (this._editBtn) this._editBtn.style.display = '';
     if (this._editOverlay) this._editOverlay.style.display = 'none';
     for (const pid of ['joystick', 'rightPanel', 'weaponBar', 'pause']) {
       const el = document.querySelector(`[data-panel-id="${pid}"]`);
