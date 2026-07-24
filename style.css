@@ -307,3 +307,26 @@
     #killfeed { right: 8px; top: 80px; font-size: 11px; }
     .kf { padding: 3px 8px; }
   }
+
+  /* Landscape: tela baixa em altura, menu compacto e touch controls ajustados */
+  @media (max-height: 500px) and (orientation: landscape) {
+    #panel { max-height: 95vh; padding: 8px 14px; }
+    #title { font-size: 22px; letter-spacing: 4px; }
+    #subtitle { font-size: 8px; margin-top: 4px; }
+    #menuBtns { gap: 3px; margin-top: 8px; flex-direction: row; flex-wrap: wrap; justify-content: center; }
+    .mbtn { min-width: 130px; padding: 4px 10px; font-size: 10px; letter-spacing: 1px; }
+    .mbtn.sec { min-width: 110px; font-size: 9px; padding: 3px 8px; }
+    #settings { padding: 6px 10px; margin-top: 6px; max-height: 70vh; overflow-y: auto; }
+    .srow { font-size: 9px; margin: 2px 0; gap: 6px; }
+    #btnEditHud, #btnBack { margin-top: 4px !important; font-size: 8px !important; padding: 3px 8px !important; min-width: 100px !important; }
+    /* Touch controls em landscape: botões menores para caber */
+    #touchControls [data-action="shoot"] { width: clamp(40px, 8vmin, 56px) !important; height: clamp(40px, 8vmin, 56px) !important; }
+    #touchControls [data-action="aim"] { width: clamp(28px, 6vmin, 38px) !important; height: clamp(28px, 6vmin, 38px) !important; }
+    #touchControls [data-action="jump"] { width: clamp(28px, 6vmin, 40px) !important; height: clamp(28px, 6vmin, 40px) !important; }
+    #touchControls [data-action="crouch"] { width: clamp(24px, 5vmin, 36px) !important; height: clamp(24px, 5vmin, 36px) !important; }
+    #touchControls [data-action="reload"] { width: clamp(22px, 5vmin, 32px) !important; height: clamp(22px, 5vmin, 32px) !important; }
+    #touchControls [data-action="grenade"] { width: clamp(22px, 5vmin, 32px) !important; height: clamp(22px, 5vmin, 32px) !important; }
+    #touchControls [data-action="medkit"] { width: clamp(22px, 5vmin, 32px) !important; height: clamp(22px, 5vmin, 32px) !important; }
+    #touchControls [data-action="pause"] { width: clamp(22px, 5vmin, 32px) !important; height: clamp(22px, 5vmin, 32px) !important; }
+    #touchControls [data-action="fullscreen"] { width: clamp(22px, 5vmin, 32px) !important; height: clamp(22px, 5vmin, 32px) !important; }
+  }

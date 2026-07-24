@@ -438,9 +438,9 @@ export class TouchControls {
     this._lookArea.addEventListener('touchcancel', b.lookEnd, { passive: true });
 
     // Botões individuais
-    // TIRO HÍBRIDO ARRÁSTAVEL (CoD Mobile style):
-    // - Tap rápido = tiro
-    // - Hold + arrastar = mira (ADS) + controla direção do tiro
+    // TIRO ESTILO COD MOBILE:
+    // - Tocar = atira imediatamente (no touchstart)
+    // - Segurar + arrastar = mira (ADS) + controla direção
     let shootHoldTimer = null;
     let shootHeld = false;
     let shootDragging = false;
@@ -456,14 +456,16 @@ export class TouchControls {
         shootDragging = false;
         shootLastX = touch.clientX;
         shootLastY = touch.clientY;
-        // Se segurar por mais de 150ms, entra em modo mira (ADS)
+        // ATIRA IMEDIATAMENTE ao tocar (igual CoD Mobile)
+        this.shoot = true;
+        this._pulse(this._btnShoot);
+        // Se segurar por mais de 200ms sem arrastar, entra em modo mira (ADS)
         shootHoldTimer = setTimeout(() => {
-          if (shootHeld) {
+          if (shootHeld && !shootDragging) {
             this.aim = true;
-            shootDragging = true;
             this._pulse(this._btnAim);
           }
-        }, 150);
+        }, 200);
       }, { passive: false });
       
       shootBtn.addEventListener('touchmove', e => {
@@ -475,43 +477,36 @@ export class TouchControls {
         shootLastX = touch.clientX;
         shootLastY = touch.clientY;
         
-        // Se está arrastando enquanto segura, aplica rotação da câmera
-        if (shootDragging || shootHeld) {
-          // Acumula delta para rotação (similar ao look area)
+        // Se arrastou, ativa modo arrastar
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+          shootDragging = true;
+          if (!this.aim) {
+            this.aim = true;
+            clearTimeout(shootHoldTimer);
+          }
+        }
+        // Aplica rotação da câmera ao arrastar
+        if (shootDragging) {
           this.lookDeltaX += dx;
           this.lookDeltaY += dy;
-          // Se arrastou significativamente, força modo ADS
-          if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
-            if (!this.aim) {
-              this.aim = true;
-              shootDragging = true;
-              clearTimeout(shootHoldTimer);
-            }
-          }
         }
       }, { passive: false });
       
       shootBtn.addEventListener('touchend', e => {
         e.preventDefault();
         shootHeld = false;
+        shootDragging = false;
         clearTimeout(shootHoldTimer);
-        if (this.aim || shootDragging) {
-          // Estava mirando/arrastando — atira ao soltar
-          this.shoot = true;
-          this.aim = false;
-          shootDragging = false;
-          setTimeout(() => { this.shoot = false; }, 50);
-        } else {
-          // Tap rápido — tiro direto
-          this.shoot = true;
-          setTimeout(() => { this.shoot = false; }, 80);
-        }
+        // Para de atirar ao soltar
+        this.shoot = false;
+        this.aim = false;
       }, { passive: false });
       
       shootBtn.addEventListener('touchcancel', e => {
         shootHeld = false;
         shootDragging = false;
         clearTimeout(shootHoldTimer);
+        this.shoot = false;
         this.aim = false;
       }, { passive: false });
     }
