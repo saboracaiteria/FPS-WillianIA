@@ -9,10 +9,45 @@
 'use strict';
 const express = require('express');
 const http = require('http');
+const https = require('https');
 const path = require('path');
 const fs = require('fs');
 const { Server } = require('socket.io');
 const CityProto = require('./city-destruction-protocol.js');
+
+/* ---- Certificado autoassinado (HTTPS para dispositivos antigos) ---- */
+function getSelfSignedCert() {
+  const certDir = path.join(__dirname, '.cert');
+  const keyPath = path.join(certDir, 'server.key');
+  const certPath = path.join(certDir, 'server.crt');
+  // Reusa certificados existentes para evitar regenerar a cada restart
+  if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+    return { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) };
+  }
+  try {
+    const selfsigned = require('selfsigned');
+    const attrs = [{ name: 'commonName', value: 'localhost' }];
+    const pems = selfsigned.generate(attrs, {
+      algorithm: 'sha256',
+      days: 365,
+      keySize: 2048,
+      extensions: [
+        { name: 'subjectAltName', altNames: [
+          { type: 2, value: 'localhost' },
+          { type: 7, ip: '127.0.0.1' }
+        ]}
+      ]
+    });
+    // Salva para reuso
+    if (!fs.existsSync(certDir)) fs.mkdirSync(certDir, { recursive: true });
+    fs.writeFileSync(keyPath, pems.private);
+    fs.writeFileSync(certPath, pems.cert);
+    return { key: pems.private, cert: pems.cert };
+  } catch (e) {
+    console.warn('[CERT] Falha ao gerar certificado autoassinado:', e.message);
+    return null;
+  }
+}
 
 const app = express();
 /* cache: código do jogo REVALIDA sempre (no-cache + ETag = 304 barato) —
@@ -1309,6 +1344,7 @@ process.on('exit', () => { if (botsProc) try { botsProc.kill(); } catch (e) { /*
 module.exports = { saveRankNow, buildPlan, zoneAt, rollChest, mulberry32, LIM, rankEntry, pruneRank, topRank };
 
 if (require.main === module) {
+  // Servidor HTTP (padrão)
   server.listen(PORT, () => {
     console.log(`Servidor BR no ar em http://localhost:${PORT} · seed inicial ${match.seed}`);
     console.log('====================================================');
@@ -1317,4 +1353,24 @@ if (require.main === module) {
     console.log(`  abra o jogo com ?host=${HOST_CODE} na URL`);
     console.log('====================================================');
   });
+
+  // Servidor HTTPS com certificado autoassinado (para dispositivos antigos)
+  const HTTPS_PORT = (process.env.HTTPS_PORT ? +process.env.HTTPS_PORT : PORT + 1) || 3443;
+  const certData = getSelfSignedCert();
+  if (certData) {
+    const httpsServer = https.createServer(certData, app);
+    const httpsIo = new Server(httpsServer, { pingTimeout: socketPingTimeout });
+    // Conecta os mesmos handlers do Socket.IO
+    httpsIo.on('connection', socket => {
+      socket.join('br');
+      // Reusa toda a lógica do io principal
+      io.sockets.sockets.set(socket.id, socket);
+    });
+    httpsServer.listen(HTTPS_PORT, () => {
+      console.log(`Servidor HTTPS no ar em https://localhost:${HTTPS_PORT}`);
+      console.log(`  (certificado autoassinado - aceite o aviso de segurança)`);
+    });
+  } else {
+    console.warn('[HTTPS] Certificado não disponível - apenas HTTP habilitado');
+  }
 }

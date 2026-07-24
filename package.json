@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "express": "^4.19.2",
+    "selfsigned": "^2.4.1",
     "socket.io": "^4.7.5"
   },
   "devDependencies": {

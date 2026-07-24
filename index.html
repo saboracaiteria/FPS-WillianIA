@@ -5,6 +5,66 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Call of AI — FPS Mundo Aberto</title>
 <link rel="stylesheet" href="style.css">
+<script>
+/* Aviso para navegadores antigos que não suportam APIs modernas */
+(function() {
+  var ua = navigator.userAgent || '';
+  var isOld = false;
+  var msg = '';
+
+  // Detecta Android antigo (versão < 7)
+  var androidMatch = ua.match(/Android\s+([\d.]+)/);
+  if (androidMatch) {
+    var version = parseFloat(androidMatch[1]);
+    if (version < 7) {
+      isOld = true;
+      msg = 'Seu navegador Android ' + version + ' é muito antigo.\nO jogo pode não funcionar corretamente.\nRecomendamos Android 7+ ou usar HTTPS com certificado aceito.';
+    }
+  }
+
+  // Detecta iOS antigo (versão < 11)
+  var iosMatch = ua.match(/OS\s+([\d_]+)/);
+  if (iosMatch && /iPhone|iPad|iPod/.test(ua)) {
+    var iosVersion = parseFloat(iosMatch[1].replace(/_/g, '.'));
+    if (iosVersion < 11) {
+      isOld = true;
+      msg = 'Seu iOS ' + iosVersion + ' é muito antigo.\nO jogo pode não funcionar corretamente.\nRecomendamos iOS 11+.';
+    }
+  }
+
+  // Detecta Chrome muito antigo (versão < 60)
+  var chromeMatch = ua.match(/Chrome\/([\d.]+)/);
+  if (chromeMatch && !androidMatch) {
+    var chromeVersion = parseFloat(chromeMatch[1]);
+    if (chromeVersion < 60) {
+      isOld = true;
+      msg = 'Seu Chrome ' + chromeVersion + ' é muito antigo.\nO jogo pode não funcionar corretamente.\nRecomendamos Chrome 60+.';
+    }
+  }
+
+  // Verifica suporte a APIs essenciais
+  if (!isOld) {
+    if (!window.WebGLRenderingContext || !window.AudioContext) {
+      isOld = true;
+      msg = 'Seu navegador não suporta WebGL ou Web Audio.\nO jogo pode não funcionar corretamente.\nRecomendamos um navegador moderno (Chrome, Firefox, Safari).';
+    }
+  }
+
+  // Mostra o aviso se necessário
+  if (isOld && msg) {
+    document.addEventListener('DOMContentLoaded', function() {
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;color:#fff;font-family:Arial,sans-serif;padding:20px;text-align:center;';
+      overlay.innerHTML = '<div style="font-size:48px;margin-bottom:20px;">⚠️</div>' +
+        '<h2 style="color:#ff9800;margin-bottom:20px;">Navegador Antigo Detectado</h2>' +
+        '<p style="max-width:500px;line-height:1.6;margin-bottom:30px;white-space:pre-line;">' + msg + '</p>' +
+        '<button onclick="this.parentElement.remove()" style="background:#4CAF50;color:#fff;border:none;padding:12px 32px;font-size:16px;cursor:pointer;border-radius:4px;margin:5px;">Continuar mesmo assim</button>' +
+        '<button onclick="window.history.back()" style="background:#f44336;color:#fff;border:none;padding:12px 32px;font-size:16px;cursor:pointer;border-radius:4px;margin:5px;">Voltar</button>';
+      document.body.appendChild(overlay);
+    });
+  }
+})();
+</script>
 </head>
 <body>
 <canvas id="game"></canvas>
