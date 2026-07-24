@@ -1069,8 +1069,9 @@ function applyFpsCamera(dt, t) {
   if (SETTINGS.camera === 3 && !state.driving && !state.flying) {
     const thirdPersonDist = 4.5;
     const thirdPersonHeight = 2.5;
-    // Calcula offset baseado na yaw do jogador (não da câmera)
-    const yawAngle = player.yaw;
+    // Pega a yaw da câmera (rotação horizontal do jogador)
+    _euler.setFromQuaternion(camera.quaternion);
+    const yawAngle = _euler.y;
     const camOffset = new THREE.Vector3(
       Math.sin(yawAngle) * thirdPersonDist,
       thirdPersonHeight,
