@@ -438,35 +438,83 @@ export class TouchControls {
     this._lookArea.addEventListener('touchcancel', b.lookEnd, { passive: true });
 
     // Botões individuais
-    // TIRO HÍBRIDO (CoD Mobile style): tap = tiro rápido, hold = mira (ADS)
+    // TIRO HÍBRIDO ARRÁSTAVEL (CoD Mobile style):
+    // - Tap rápido = tiro
+    // - Hold + arrastar = mira (ADS) + controla direção do tiro
     let shootHoldTimer = null;
     let shootHeld = false;
-    this._bindBtn('shoot', {
-      start: () => {
+    let shootDragging = false;
+    let shootLastX = 0;
+    let shootLastY = 0;
+    const shootBtn = this._container.querySelector('[data-action="shoot"]');
+    
+    if (shootBtn) {
+      shootBtn.addEventListener('touchstart', e => {
+        e.preventDefault();
+        const touch = e.changedTouches[0];
         shootHeld = true;
-        // Se segurar por mais de 180ms, entra em modo mira (ADS)
+        shootDragging = false;
+        shootLastX = touch.clientX;
+        shootLastY = touch.clientY;
+        // Se segurar por mais de 150ms, entra em modo mira (ADS)
         shootHoldTimer = setTimeout(() => {
           if (shootHeld) {
             this.aim = true;
+            shootDragging = true;
             this._pulse(this._btnAim);
           }
-        }, 180);
-      },
-      end: () => {
+        }, 150);
+      }, { passive: false });
+      
+      shootBtn.addEventListener('touchmove', e => {
+        e.preventDefault();
+        if (!shootHeld) return;
+        const touch = e.changedTouches[0];
+        const dx = touch.clientX - shootLastX;
+        const dy = touch.clientY - shootLastY;
+        shootLastX = touch.clientX;
+        shootLastY = touch.clientY;
+        
+        // Se está arrastando enquanto segura, aplica rotação da câmera
+        if (shootDragging || shootHeld) {
+          // Acumula delta para rotação (similar ao look area)
+          this.lookDeltaX += dx;
+          this.lookDeltaY += dy;
+          // Se arrastou significativamente, força modo ADS
+          if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+            if (!this.aim) {
+              this.aim = true;
+              shootDragging = true;
+              clearTimeout(shootHoldTimer);
+            }
+          }
+        }
+      }, { passive: false });
+      
+      shootBtn.addEventListener('touchend', e => {
+        e.preventDefault();
         shootHeld = false;
         clearTimeout(shootHoldTimer);
-        if (this.aim) {
-          // Estava mirando — atira ao soltar
+        if (this.aim || shootDragging) {
+          // Estava mirando/arrastando — atira ao soltar
           this.shoot = true;
           this.aim = false;
+          shootDragging = false;
           setTimeout(() => { this.shoot = false; }, 50);
         } else {
           // Tap rápido — tiro direto
           this.shoot = true;
           setTimeout(() => { this.shoot = false; }, 80);
         }
-      },
-    });
+      }, { passive: false });
+      
+      shootBtn.addEventListener('touchcancel', e => {
+        shootHeld = false;
+        shootDragging = false;
+        clearTimeout(shootHoldTimer);
+        this.aim = false;
+      }, { passive: false });
+    }
     this._bindBtn('aim', {
       start: () => { this.aim = true; this._pulse(this._btnAim); },
       end: () => { this.aim = false; },
