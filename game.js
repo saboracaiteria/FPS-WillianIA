@@ -7,6 +7,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CSM } from 'three/addons/csm/CSM.js';
 import { CFG, SETTINGS, persistSettings, isMobileDevice, isSmallScreen } from './js/config.js';
@@ -174,7 +175,7 @@ for (const l of csm.lights) {
 const csmMaterials = [];
 function csmMat(mat) { csm.setupMaterial(mat); csmMaterials.push(mat); return mat; }
 
-/* ---- composer: Render -> Bloom -> SMAA -> Output (Output SEMPRE por último) ---- */
+/* ---- composer: Render -> Bloom -> SMAA -> Saturation -> Output (Output SEMPRE por último) ---- */
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloomPass = new UnrealBloomPass(
@@ -188,6 +189,32 @@ if (!isMobile) {
   const smaaPass = new SMAAPass(window.innerWidth * renderer.getPixelRatio(), window.innerHeight * renderer.getPixelRatio());
   composer.addPass(smaaPass);
 }
+// Boost de saturação: ACES tende a desaturar — adiciona um ShaderPass para cores mais vivas
+const saturationPass = new ShaderPass({
+  uniforms: {
+    tDiffuse: { value: null },
+    saturation: { value: 1.35 }, // 1.0 = normal, >1 = mais saturado
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float saturation;
+    varying vec2 vUv;
+    void main() {
+      vec4 color = texture2D(tDiffuse, vUv);
+      float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+      color.rgb = mix(vec3(gray), color.rgb, saturation);
+      gl_FragColor = color;
+    }
+  `
+});
+composer.addPass(saturationPass);
 composer.addPass(new OutputPass());
 bloomPass.enabled = +SETTINGS.bloom !== 0;
 if (+SETTINGS.shadow === 0) renderer.shadowMap.enabled = false;

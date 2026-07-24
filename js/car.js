@@ -248,6 +248,16 @@ export function createCar(deps) {
       } else {
         for (let i = 0; i < 4; i++) { v.vehicle.setBrake(8, i); v.vehicle.applyEngineForce(0, i); }
       }
+      // Anti-capotamento: detecta se o carro está de cabeça para baixo e aplica torque para desvirar
+      const upVec = new CANNON.Vec3(0, 1, 0);
+      const carUp = new CANNON.Vec3();
+      v.chassisBody.quaternion.vmult(upVec, carUp);
+      // Se o "topo" do carro aponta para baixo (y < 0.3), está capotado
+      if (carUp.y < 0.3) {
+        // Aplica torque para desvirar (rotação em torno do eixo X ou Z)
+        const flipTorque = new CANNON.Vec3(carUp.z * 120, 0, -carUp.x * 120);
+        v.chassisBody.applyTorque(flipTorque);
+      }
       v.group.position.copy(v.chassisBody.position);
       v.group.quaternion.copy(v.chassisBody.quaternion);
       for (let i = 0; i < 4; i++) {

@@ -30,11 +30,12 @@ export const CFG = {
   BLOOM_STRENGTH:   _isMobile ? 0.12 : 0.22,
   BLOOM_RADIUS:     0.3,
   BLOOM_THRESHOLD:  1.0,
-  EXPOSURE:         0.58,
+  EXPOSURE:         0.72,
 };
 
 /* ===== configurações (localStorage) ===== */
-export const SETTINGS = Object.assign({ vol: 0.5, perf: 1, res: 1, grass: 1, shadow: 1, bloom: 1, ping: 1 },
+// Padrão: modo Desempenho, resolução baixa, sem som, sem bloom — roda liso em qualquer dispositivo
+export const SETTINGS = Object.assign({ vol: 0, perf: 0, res: 0.75, grass: 0.5, shadow: 0, bloom: 0, ping: 1 },
   (() => { try { return JSON.parse(localStorage.getItem('callofai_cfg') || '{}'); } catch (e) { return {}; } })());
 export function persistSettings() { localStorage.setItem('callofai_cfg', JSON.stringify(SETTINGS)); }
 

@@ -228,75 +228,75 @@ export class TouchControls {
 
     // --- Botões individuais (cada um posicionável) ---
     // ATIRAR (grande)
-    this._btnShoot = this._createBtn('', '72px', '#ff4444', 'rgba(255,68,68,0.3)');
+    this._btnShoot = this._createBtn('', '90px', '#ff4444', 'rgba(255,68,68,0.3)');
     this._btnShoot.dataset.action = 'shoot';
     this._btnShoot.dataset.editable = 'true';
     this._btnShoot.dataset.panelId = 'shoot';
     Object.assign(this._btnShoot.style, { position: 'absolute', right: '24px', bottom: '24px' });
     const inner = document.createElement('div');
-    Object.assign(inner.style, { width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' });
+    Object.assign(inner.style, { width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)' });
     this._btnShoot.appendChild(inner);
     this._container.appendChild(this._btnShoot);
 
     // MIRAR (ADS)
-    this._btnAim = this._createBtn('🎯', '46px', '#ffcc44', 'rgba(255,204,68,0.2)');
+    this._btnAim = this._createBtn('🎯', '58px', '#ffcc44', 'rgba(255,204,68,0.2)');
     this._btnAim.dataset.action = 'aim';
     this._btnAim.dataset.editable = 'true';
     this._btnAim.dataset.panelId = 'aim';
-    Object.assign(this._btnAim.style, { position: 'absolute', right: '110px', bottom: '40px' });
+    Object.assign(this._btnAim.style, { position: 'absolute', right: '128px', bottom: '44px' });
     this._container.appendChild(this._btnAim);
 
     // PULAR
-    this._btnJump = this._createBtn('⤊', '48px', '#5ab0ff', 'rgba(90,176,255,0.25)');
+    this._btnJump = this._createBtn('⤊', '60px', '#5ab0ff', 'rgba(90,176,255,0.25)');
     this._btnJump.dataset.action = 'jump';
     this._btnJump.dataset.editable = 'true';
     this._btnJump.dataset.panelId = 'jump';
-    Object.assign(this._btnJump.style, { position: 'absolute', right: '24px', bottom: '110px' });
+    Object.assign(this._btnJump.style, { position: 'absolute', right: '24px', bottom: '126px' });
     this._container.appendChild(this._btnJump);
 
     // AGACHAR
-    this._btnCrouch = this._createBtn('⤋', '44px', '#a0a0a0', 'rgba(160,160,160,0.2)');
+    this._btnCrouch = this._createBtn('⤋', '56px', '#a0a0a0', 'rgba(160,160,160,0.2)');
     this._btnCrouch.dataset.action = 'crouch';
     this._btnCrouch.dataset.editable = 'true';
     this._btnCrouch.dataset.panelId = 'crouch';
-    Object.assign(this._btnCrouch.style, { position: 'absolute', right: '80px', bottom: '110px' });
+    Object.assign(this._btnCrouch.style, { position: 'absolute', right: '96px', bottom: '126px' });
     this._container.appendChild(this._btnCrouch);
 
     // RECARREGAR
-    this._btnReload = this._createBtn('↺', '40px', '#cccccc', 'rgba(200,200,200,0.15)');
+    this._btnReload = this._createBtn('↺', '52px', '#cccccc', 'rgba(200,200,200,0.15)');
     this._btnReload.dataset.action = 'reload';
     this._btnReload.dataset.editable = 'true';
     this._btnReload.dataset.panelId = 'reload';
-    Object.assign(this._btnReload.style, { position: 'absolute', right: '130px', bottom: '110px' });
+    Object.assign(this._btnReload.style, { position: 'absolute', right: '164px', bottom: '126px' });
     this._container.appendChild(this._btnReload);
 
     // GRANADA
-    this._btnGrenade = this._createBtn('●', '40px', '#ff8844', 'rgba(255,136,68,0.2)');
+    this._btnGrenade = this._createBtn('●', '52px', '#ff8844', 'rgba(255,136,68,0.2)');
     this._btnGrenade.dataset.action = 'grenade';
     this._btnGrenade.dataset.editable = 'true';
     this._btnGrenade.dataset.panelId = 'grenade';
-    Object.assign(this._btnGrenade.style, { position: 'absolute', right: '24px', bottom: '170px' });
+    Object.assign(this._btnGrenade.style, { position: 'absolute', right: '24px', bottom: '198px' });
     this._container.appendChild(this._btnGrenade);
 
     // MEDKIT
-    this._btnMedkit = this._createBtn('✚', '40px', '#ff6a5e', 'rgba(255,106,94,0.2)');
+    this._btnMedkit = this._createBtn('✚', '52px', '#ff6a5e', 'rgba(255,106,94,0.2)');
     this._btnMedkit.dataset.action = 'medkit';
     this._btnMedkit.dataset.editable = 'true';
     this._btnMedkit.dataset.panelId = 'medkit';
-    Object.assign(this._btnMedkit.style, { position: 'absolute', right: '80px', bottom: '170px' });
+    Object.assign(this._btnMedkit.style, { position: 'absolute', right: '96px', bottom: '198px' });
     this._container.appendChild(this._btnMedkit);
 
-    // INTERAGIR (contextual)
-    this._btnInteract = this._createBtn('✋', '50px', '#4CAF50', 'rgba(76,175,80,0.25)');
+    // INTERAGIR (contextual - redondo, sem texto)
+    this._btnInteract = this._createBtn('E', '62px', '#4CAF50', 'rgba(76,175,80,0.25)');
     this._btnInteract.dataset.action = 'interact';
     this._btnInteract.dataset.editable = 'true';
     this._btnInteract.dataset.panelId = 'interact';
     this._btnInteract.style.display = 'none';
-    Object.assign(this._btnInteract.style, { position: 'absolute', right: '24px', bottom: '230px' });
+    Object.assign(this._btnInteract.style, { position: 'absolute', right: '24px', bottom: '262px' });
     this._container.appendChild(this._btnInteract);
 
     // PAUSA (canto superior esquerdo)
-    this._btnPause = this._createBtn('⏸', '40px', '#ffffff', 'rgba(0,0,0,0.3)');
+    this._btnPause = this._createBtn('⏸', '48px', '#ffffff', 'rgba(0,0,0,0.3)');
     this._btnPause.dataset.action = 'pause';
     this._btnPause.dataset.editable = 'true';
     this._btnPause.dataset.panelId = 'pause';
@@ -304,11 +304,11 @@ export class TouchControls {
     this._container.appendChild(this._btnPause);
 
     // FULLSCREEN (ao lado do pausa)
-    this._btnFullscreen = this._createBtn('⛶', '40px', '#ffffff', 'rgba(0,0,0,0.3)');
+    this._btnFullscreen = this._createBtn('⛶', '48px', '#ffffff', 'rgba(0,0,0,0.3)');
     this._btnFullscreen.dataset.action = 'fullscreen';
     this._btnFullscreen.dataset.editable = 'true';
     this._btnFullscreen.dataset.panelId = 'fullscreen';
-    Object.assign(this._btnFullscreen.style, { position: 'absolute', left: '60px', top: '12px' });
+    Object.assign(this._btnFullscreen.style, { position: 'absolute', left: '68px', top: '12px' });
     this._container.appendChild(this._btnFullscreen);
 
     // --- Barra de armas (lateral direita) ---
