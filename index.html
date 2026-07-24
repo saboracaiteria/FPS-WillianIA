@@ -11,6 +11,7 @@
   var ua = navigator.userAgent || '';
   var isOld = false;
   var msg = '';
+  var canContinue = true;
 
   // Detecta Android antigo (versão < 7)
   var androidMatch = ua.match(/Android\s+([\d.]+)/);
@@ -18,7 +19,14 @@
     var version = parseFloat(androidMatch[1]);
     if (version < 7) {
       isOld = true;
-      msg = 'Seu navegador Android ' + version + ' é muito antigo.\nO jogo pode não funcionar corretamente.\nRecomendamos Android 7+ ou usar HTTPS com certificado aceito.';
+      canContinue = false;
+      msg = 'Seu Android ' + version + ' é muito antigo.\n\n' +
+        'Este jogo requer Android 7 ou superior.\n' +
+        'O navegador não suporta as tecnologias necessárias (ES Modules, WebGL2).\n\n' +
+        'Soluções:\n' +
+        '• Atualize o Android do dispositivo\n' +
+        '• Use um navegador moderno (Chrome 60+, Firefox)\n' +
+        '• Instale um launcher de jogos Android';
     }
   }
 
@@ -28,7 +36,11 @@
     var iosVersion = parseFloat(iosMatch[1].replace(/_/g, '.'));
     if (iosVersion < 11) {
       isOld = true;
-      msg = 'Seu iOS ' + iosVersion + ' é muito antigo.\nO jogo pode não funcionar corretamente.\nRecomendamos iOS 11+.';
+      canContinue = false;
+      msg = 'Seu iOS ' + iosVersion + ' é muito antigo.\n\n' +
+        'Este jogo requer iOS 11 ou superior.\n' +
+        'O navegador não suporta as tecnologias necessárias.\n\n' +
+        'Solução: Atualize o iOS do dispositivo.';
     }
   }
 
@@ -38,15 +50,29 @@
     var chromeVersion = parseFloat(chromeMatch[1]);
     if (chromeVersion < 60) {
       isOld = true;
-      msg = 'Seu Chrome ' + chromeVersion + ' é muito antigo.\nO jogo pode não funcionar corretamente.\nRecomendamos Chrome 60+.';
+      canContinue = false;
+      msg = 'Seu Chrome ' + chromeVersion + ' é muito antigo.\n\n' +
+        'Este jogo requer Chrome 60 ou superior.\n\n' +
+        'Solução: Atualize o Chrome para a versão mais recente.';
     }
   }
 
   // Verifica suporte a APIs essenciais
   if (!isOld) {
-    if (!window.WebGLRenderingContext || !window.AudioContext) {
+    var missingAPIs = [];
+    if (!window.WebGLRenderingContext) missingAPIs.push('WebGL');
+    if (!window.AudioContext && !window.webkitAudioContext) missingAPIs.push('Web Audio');
+    if (!('noModule' in document.createElement('script'))) missingAPIs.push('ES Modules');
+    if (!window.Promise) missingAPIs.push('Promise');
+    if (!window.fetch) missingAPIs.push('Fetch API');
+    
+    if (missingAPIs.length > 0) {
       isOld = true;
-      msg = 'Seu navegador não suporta WebGL ou Web Audio.\nO jogo pode não funcionar corretamente.\nRecomendamos um navegador moderno (Chrome, Firefox, Safari).';
+      canContinue = false;
+      msg = 'Seu navegador não suporta tecnologias essenciais:\n\n' +
+        '• ' + missingAPIs.join('\n• ') + '\n\n' +
+        'O jogo não funcionará neste navegador.\n\n' +
+        'Solução: Use um navegador moderno (Chrome, Firefox, Edge, Safari).';
     }
   }
 
@@ -54,13 +80,31 @@
   if (isOld && msg) {
     document.addEventListener('DOMContentLoaded', function() {
       var overlay = document.createElement('div');
-      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;color:#fff;font-family:Arial,sans-serif;padding:20px;text-align:center;';
-      overlay.innerHTML = '<div style="font-size:48px;margin-bottom:20px;">⚠️</div>' +
-        '<h2 style="color:#ff9800;margin-bottom:20px;">Navegador Antigo Detectado</h2>' +
-        '<p style="max-width:500px;line-height:1.6;margin-bottom:30px;white-space:pre-line;">' + msg + '</p>' +
-        '<button onclick="this.parentElement.remove()" style="background:#4CAF50;color:#fff;border:none;padding:12px 32px;font-size:16px;cursor:pointer;border-radius:4px;margin:5px;">Continuar mesmo assim</button>' +
-        '<button onclick="window.history.back()" style="background:#f44336;color:#fff;border:none;padding:12px 32px;font-size:16px;cursor:pointer;border-radius:4px;margin:5px;">Voltar</button>';
+      overlay.id = 'legacyBrowserWarning';
+      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;padding:20px;text-align:center;';
+      
+      var buttons = canContinue 
+        ? '<button onclick="document.getElementById(\'legacyBrowserWarning\').remove()" style="background:#4CAF50;color:#fff;border:none;padding:14px 32px;font-size:16px;cursor:pointer;border-radius:8px;margin:5px;box-shadow:0 4px 15px rgba(76,175,80,0.3);">Continuar mesmo assim</button>' +
+          '<button onclick="window.history.back()" style="background:#f44336;color:#fff;border:none;padding:14px 32px;font-size:16px;cursor:pointer;border-radius:8px;margin:5px;box-shadow:0 4px 15px rgba(244,67,54,0.3);">Voltar</button>'
+        : '<button onclick="window.history.back()" style="background:#f44336;color:#fff;border:none;padding:14px 32px;font-size:16px;cursor:pointer;border-radius:8px;margin:5px;box-shadow:0 4px 15px rgba(244,67,54,0.3);">Voltar</button>' +
+          '<p style="margin-top:20px;font-size:12px;opacity:0.7;">O jogo não funcionará neste navegador devido a limitações técnicas.</p>';
+      
+      overlay.innerHTML = '<div style="font-size:64px;margin-bottom:20px;filter: drop-shadow(0 0 20px rgba(255,152,0,0.5));">⚠️</div>' +
+        '<h2 style="color:#ff9800;margin-bottom:10px;font-size:24px;text-shadow:0 2px 10px rgba(255,152,0,0.3);">Navegador Incompatível</h2>' +
+        '<p style="max-width:500px;line-height:1.8;margin-bottom:30px;white-space:pre-line;opacity:0.9;font-size:14px;">' + msg + '</p>' +
+        buttons;
+      
+      // Remove o canvas do jogo para evitar conflito
+      var canvas = document.getElementById('game');
+      if (canvas) canvas.style.display = 'none';
+      
       document.body.appendChild(overlay);
+      
+      // Para navegadores que não suportam ES Modules, não carrega o game.js
+      if (!canContinue && !('noModule' in document.createElement('script'))) {
+        var scripts = document.querySelectorAll('script[type="module"]');
+        scripts.forEach(function(s) { s.remove(); });
+      }
     });
   }
 })();
