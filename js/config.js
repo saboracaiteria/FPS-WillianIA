@@ -34,7 +34,7 @@ export const CFG = {
 };
 
 /* ===== configurações (localStorage) ===== */
-export const SETTINGS = Object.assign({ vol: 0.5, res: 1, grass: 1, shadow: 1, bloom: 1, ping: 1 },
+export const SETTINGS = Object.assign({ vol: 0.5, perf: 1, res: 1, grass: 1, shadow: 1, bloom: 1, ping: 1 },
   (() => { try { return JSON.parse(localStorage.getItem('callofai_cfg') || '{}'); } catch (e) { return {}; } })());
 export function persistSettings() { localStorage.setItem('callofai_cfg', JSON.stringify(SETTINGS)); }
 
