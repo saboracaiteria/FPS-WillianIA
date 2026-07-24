@@ -1069,8 +1069,13 @@ function applyFpsCamera(dt, t) {
   if (SETTINGS.camera === 3 && !state.driving && !state.flying) {
     const thirdPersonDist = 4.5;
     const thirdPersonHeight = 2.5;
-    const camOffset = new THREE.Vector3(0, thirdPersonHeight, -thirdPersonDist);
-    camOffset.applyQuaternion(camera.quaternion);
+    // Calcula offset baseado na yaw do jogador (não da câmera)
+    const yawAngle = player.yaw;
+    const camOffset = new THREE.Vector3(
+      Math.sin(yawAngle) * thirdPersonDist,
+      thirdPersonHeight,
+      Math.cos(yawAngle) * thirdPersonDist
+    );
     camera.position.copy(player.pos).add(camOffset);
     camera.position.y = Math.max(camera.position.y, heightAt(camera.position.x, camera.position.z) + 0.5);
     camera.lookAt(player.pos.x, player.pos.y + eyeH * 0.7, player.pos.z);
@@ -2176,10 +2181,17 @@ ui.overlay.addEventListener('click', (e) => {
   const preInitAudio = () => {
     if (audioPreInited) return;
     audioPreInited = true;
-    try { SFX.init(); } catch (e) {}
+    try { SFX.init(); SFX.resume(); } catch (e) {}
   };
   ui.overlay.addEventListener('touchstart', preInitAudio, { once: true, passive: true });
   ui.overlay.addEventListener('mousedown', preInitAudio, { once: true });
+}
+
+/* ---- Mobile: resume áudio em QUALQUER toque (iOS requer interação) ---- */
+if (isMobileDevice() || isSmallScreen()) {
+  document.addEventListener('touchstart', () => {
+    try { SFX.resume(); } catch (e) {}
+  }, { passive: true });
 }
 
 /* ---- Botão voltar do mobile: navega menus e pausa o jogo ---- */

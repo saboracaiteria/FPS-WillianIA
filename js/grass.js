@@ -156,8 +156,8 @@ export function createGrass(deps) {
       dummy.position.set(lx, y, lz);
       dummy.rotation.set(rand(-0.13, 0.13), rand(TAU), rand(-0.13, 0.13));
       let s = rand(0.65, 1.4) * CFG.GRASS_HEIGHT;
-      // deserto: SEM grama (lâminas colapsam completamente)
-      if (desert > 0.1) s = 0.001; // praticamente invisível
+      // deserto: SEM grama (bioma negativo = areia)
+      if (bio < 0) s = 0; // 100% sem grama no deserto
       if (y < WATER_LEVEL + 0.25) s = 0.015; // nada de grama dentro dos lagos
       // distrito urbano é asfalto: grama não brota no perímetro da cidade
       // (escala ~zero: até lâmina de 1,5cm pontilhava verde no chão claro)
