@@ -820,6 +820,15 @@ function setPaused(p) {
       window.__touch._editOverlay.style.display = 'none';
     }
   }
+  // Mostra/esconde título "PAUSADO" e botão "RESUMIR"
+  const pauseTitle = document.getElementById('pauseTitle');
+  const btnResume = document.getElementById('btnResume');
+  if (pauseTitle) pauseTitle.style.display = (p && state.started) ? '' : 'none';
+  if (btnResume) btnResume.style.display = (p && state.started) ? '' : 'none';
+  // Pausa inimigos no modo offline (não BR)
+  if (window.__Enemies && !window.__BR_active) {
+    window.__Enemies.paused = p;
+  }
 }
 window.__setPaused = setPaused;
 
@@ -1642,6 +1651,7 @@ function setTimeScale(v) { timeScale = v; }
 const Pickups = createPickups({ heightAt, SFX, scene, Structures, showBanner, centerMsg, getGun: () => gun, updateAmmoHUD, updateInvHUD, updateArmorHUD, player, inventory }); // criado antes: Enemies dropa loot
 const Chars = createCharModels();
 const Enemies = createEnemies({ CFG, clamp, lerp, damp, rand, TAU, _v1, _v2, _v3, heightAt, slopeAt, terrainNormal, WATER_LEVEL, obstaclesNear, SFX, FX, scene, csmMat, Structures, addScore, addKillFeed, player, playerDamage, addTrauma, Car, Pickups, knuckleMat, lastShotInfo, Chars });
+window.__Enemies = Enemies; // Expõe para setPaused pausar inimigos
 
 /* registro do último tiro do player (os inimigos "ouvem") */
 /* alvos extras (animais, zumbis, fantasmas) e lista de bosses */
@@ -2025,14 +2035,35 @@ function startTraining(trusted) {
   history.pushState({ screen: 'game' }, '');
 }
 /* ---- menu: botões + configurações ---- */
+// Botão RESUMIR (só aparece quando pausado)
+$('btnResume').addEventListener('click', e => {
+  e.stopPropagation();
+  SFX.resume();
+  setPaused(false);
+  const isTouch = window.__touch && window.__touch.enabled;
+  if (!isTouch && !isMobileDevice()) { try { controls.lock(); } catch (err) { state.lockFailed = true; } }
+  else { state.lockFailed = true; }
+});
+
+// Função de confirmação para novo jogo/modo quando pausado
+function confirmAction(action) {
+  if (state.started && state.paused) {
+    if (confirm('Tem certeza que deseja sair? O progresso não salvo será perdido.')) {
+      action();
+    }
+  } else {
+    action();
+  }
+}
+
 $('btnNew').addEventListener('click', e => {
   e.stopPropagation();
   if (__mpSocket) return; // sala online: o lobby BR assume — nada de solo por cima
-  startGame(e.isTrusted);
+  confirmAction(() => startGame(e.isTrusted));
 });
 $('btnTraining').addEventListener('click', e => {
   e.stopPropagation();
-  startTraining(e.isTrusted);
+  confirmAction(() => startTraining(e.isTrusted));
 });
 $('btnExitTraining').addEventListener('click', e => {
   e.stopPropagation();

@@ -305,6 +305,8 @@ export function createEnemies(deps) {
   }
 
   function update(dt, t) {
+    // Pausa inimigos quando jogo está pausado (offline)
+    if (module.paused) return;
     const pEye = _v3.copy(player.pos); pEye.y += 1.5;
     for (const e of list) {
       const g = e.group;
@@ -490,5 +492,6 @@ export function createEnemies(deps) {
     }
   }
 
-  return { list, update, ready };
+  const module = { list, update, ready, paused: false };
+  return module;
 }
