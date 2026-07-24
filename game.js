@@ -1064,10 +1064,23 @@ function applyFpsCamera(dt, t) {
   const bobY = Math.sin(player.bobTime * 2) * 0.046 * player.bobAmp * bobScale;
   const bobX = Math.cos(player.bobTime) * 0.034 * player.bobAmp * bobScale;
   _v2.set(1, 0, 0).applyQuaternion(camera.quaternion);
-  camera.position.copy(player.pos);
-  camera.position.y += eyeH + bobY * 0.55 + player.landDip;
-  camera.position.addScaledVector(_v2, bobX * 0.4 + shakeX);
-  camera.position.y += shakeY;
+  
+  // Modo terceira pessoa: câmera atrás do jogador
+  if (SETTINGS.camera === 3 && !state.driving && !state.flying) {
+    const thirdPersonDist = 4.5;
+    const thirdPersonHeight = 2.5;
+    const camOffset = new THREE.Vector3(0, thirdPersonHeight, -thirdPersonDist);
+    camOffset.applyQuaternion(camera.quaternion);
+    camera.position.copy(player.pos).add(camOffset);
+    camera.position.y = Math.max(camera.position.y, heightAt(camera.position.x, camera.position.z) + 0.5);
+    camera.lookAt(player.pos.x, player.pos.y + eyeH * 0.7, player.pos.z);
+  } else {
+    // Primeira pessoa (padrão)
+    camera.position.copy(player.pos);
+    camera.position.y += eyeH + bobY * 0.55 + player.landDip;
+    camera.position.addScaledVector(_v2, bobX * 0.4 + shakeX);
+    camera.position.y += shakeY;
+  }
 
   // ---- sway da arma (acompanha o mouse com atraso) ----
   const swTX = clamp(-mouse.swayX * 0.0021, -0.09, 0.09);
@@ -2102,10 +2115,11 @@ $('btnSettings').addEventListener('click', e => { e.stopPropagation(); $('settin
 $('btnBack').addEventListener('click', e => { e.stopPropagation(); $('settings').classList.remove('open'); });
 $('settings').addEventListener('click', e => e.stopPropagation());
 { // bindings das configurações (aplicam ao vivo + persistem)
-  const sv = $('setVol'), sp2 = $('setPerf'), sr = $('setRes'), sg = $('setGrass'), ss = $('setShadow'), sb = $('setBloom'), sp = $('setPing');
+  const sv = $('setVol'), sp2 = $('setPerf'), sr = $('setRes'), sg = $('setGrass'), ss = $('setShadow'), sb = $('setBloom'), sp = $('setPing'), sc = $('setCamera');
   sv.value = SETTINGS.vol * 100;
   sp2.value = String(SETTINGS.perf); sr.value = String(SETTINGS.res); sg.value = String(SETTINGS.grass); ss.value = String(SETTINGS.shadow); sb.value = String(SETTINGS.bloom);
   sp.value = String(SETTINGS.ping === 0 ? 0 : 1);
+  sc.value = String(SETTINGS.camera);
   sv.oninput = () => { SETTINGS.vol = sv.value / 100; SFX.setVolumes(); persistSettings(); };
   sp2.onchange = () => {
     SETTINGS.perf = +sp2.value;
@@ -2134,6 +2148,7 @@ $('settings').addEventListener('click', e => e.stopPropagation());
   ss.onchange = () => { SETTINGS.shadow = +ss.value; renderer.shadowMap.enabled = SETTINGS.shadow === 1 && SETTINGS.perf === 1; csmMaterials.forEach(m => m.needsUpdate = true); persistSettings(); };
   sb.onchange = () => { SETTINGS.bloom = +sb.value; bloomPass.enabled = SETTINGS.bloom === 1 && SETTINGS.perf === 1; persistSettings(); };
   sp.onchange = () => { SETTINGS.ping = +sp.value; persistSettings(); };
+  sc.onchange = () => { SETTINGS.camera = +sc.value; persistSettings(); };
   // Aplica ao iniciar
   Grass.setDensity(SETTINGS.grass);
   if (SETTINGS.perf === 0) {
